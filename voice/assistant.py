@@ -3,14 +3,14 @@
   {"name": "Зевс", "wake": ["з[еэё][вф][сз]\\w*", "зевес\\w*", "zeus", "зеус"]}
 
 wake — регулярные выражения (без ^ и \\b) для вариантов, как Whisper может услышать имя.
-Нет файла — Зевс по умолчанию.
+Нет файла (setup.ps1 не запускали) — имя VoxCode, откликается на «Вокс».
 """
 import json
 from pathlib import Path
 
 HERE = Path(__file__).parent
 FILE = HERE / "assistant.json"
-DEFAULT = {"name": "Зевс", "wake": [r"з[еэё][вф][сз]\w*", r"зевес\w*", "zeus", "зеус"]}
+DEFAULT = {"name": "VoxCode", "wake": [r"вокс\w*", r"vox\w*"]}
 
 
 def load():

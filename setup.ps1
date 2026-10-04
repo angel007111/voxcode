@@ -27,15 +27,12 @@ if ($miss) {
 # 2. Имя помощника и слово-активатор
 $cfgFile = "$Voice\assistant.json"
 $cur = if (Test-Path $cfgFile) { Get-Content $cfgFile -Raw -Encoding utf8 | ConvertFrom-Json } else { $null }
-$name = Ask 'Как зовут помощника (на него он и откликается)' $(if ($cur) { $cur.name } else { 'Зевс' })
-if ($name -eq 'Зевс') {
-  $wake = @('з[еэё][вф][сз]\w*', 'зевес\w*', 'zeus', 'зеус')
-} else {
-  # имя целиком и с окончаниями («Джарвис», «Джарвиса»); латиницу распознавание тоже может выдать
-  $wake = @([regex]::Escape($name.ToLower()) + '\w*')
-  $extra = Ask 'Как ещё распознавание может услышать имя (через запятую, можно пусто)' ''
-  if ($extra) { $wake += $extra.Split(',') | ForEach-Object { [regex]::Escape($_.Trim().ToLower()) + '\w*' } | Where-Object { $_ -ne '\w*' } }
-}
+# имя обязательно: на него помощник откликается и так себя называет
+do { $name = Ask 'Как зовут помощника (на это имя он будет откликаться)' $(if ($cur) { $cur.name }) } while (-not $name)
+# имя целиком и с окончаниями («Джарвис», «Джарвиса»); варианты — как его может услышать распознавание
+$wake = @([regex]::Escape($name.ToLower()) + '\w*')
+$extra = Ask 'Как ещё распознавание может услышать имя (через запятую, например латиницей; можно пусто)' ''
+if ($extra) { $wake += $extra.Split(',') | ForEach-Object { [regex]::Escape($_.Trim().ToLower()) + '\w*' } | Where-Object { $_ -ne '\w*' } }
 [IO.File]::WriteAllText($cfgFile, (@{ name = $name; wake = $wake } | ConvertTo-Json), $utf8)
 # характер и правила — из шаблона, с новым именем
 $tpl = [IO.File]::ReadAllText("$Root\CLAUDE.template.md", [Text.Encoding]::UTF8)

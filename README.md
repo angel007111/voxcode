@@ -1,6 +1,6 @@
 # VoxCode — голосовая оболочка для Claude Code
 
-*Имя помощника задаётся при установке (`setup.ps1`): на него он откликается и так себя называет. По умолчанию — «Зевс».*
+*Имя помощника задаётся при установке (`setup.ps1`): на него он откликается и так себя называет. Без установщика — «VoxCode», откликается на «Вокс».*
 
 Голосовая панель для [Claude Code](https://claude.com/claude-code) под Windows: говоришь «<имя>, …» —
 сессия Claude Code получает команду через канал, выполняет её и отвечает голосом. Работает по подписке
@@ -35,7 +35,7 @@ voice/voxcode_app.py — панель (окно + ядро listener), voxcode-tr
    powershell -ExecutionPolicy Bypass -File setup.ps1
    ```
    - **Имя** — на него помощник откликается (слово-активатор) и так себя называет (`CLAUDE.md` из
-     `CLAUDE.template.md`). Хранится в `voice/assistant.json`; по умолчанию «Зевс».
+     `CLAUDE.template.md`). Хранится в `voice/assistant.json`.
    - **Google Cloud TTS** (необязательно): API-ключ с доступом к Cloud Text-to-Speech API → `voice/.google_tts_key`.
      Без ключа — бесплатный edge-tts.
    - **Claude**: ключ не нужен — работает по подписке; достаточно один раз войти в `claude`.
