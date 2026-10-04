@@ -1,4 +1,6 @@
-# Зевс (Zews) — голосовой помощник на Claude Code
+# VoxCode — голосовая оболочка для Claude Code
+
+*Персонаж по умолчанию — «Зевс» (Zews): имя и характер меняются в `CLAUDE.md`, слово-активатор — `WAKE` в `voice/listener.py`.*
 
 Голосовая панель для [Claude Code](https://claude.com/claude-code) под Windows: говоришь «Зевс, …» —
 сессия Claude Code получает команду через канал, выполняет её и отвечает голосом. Работает по подписке
@@ -66,7 +68,7 @@ MIT
 ---
 
 ## English summary
-**Zews** is a Windows voice front-end for Claude Code: a floating panel with local speech recognition
+**VoxCode** (default persona "Zews") is a Windows voice front-end for Claude Code: a floating panel with local speech recognition
 (faster-whisper), wake word, dictation, TTS (Google Cloud TTS or edge-tts), barge-in by the owner's voice
 (SpeechBrain speaker verification that tells your voice from the speaker echo), and a tray watchdog that
 keeps a hidden Claude Code session alive with `--resume` and `/compact`. Commands reach the session through
