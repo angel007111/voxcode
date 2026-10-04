@@ -1,0 +1,10 @@
+faster-whisper
+numpy
+requests
+sounddevice
+pywebview
+edge-tts
+av
+# узнавание голоса владельца (перебивание без «Зевс»); можно не ставить — тогда только по слову «Зевс»
+speechbrain
+torch

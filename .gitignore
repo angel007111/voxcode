@@ -1,0 +1,23 @@
+# зависимости и сборка
+voice/node_modules/
+__pycache__/
+*.pyc
+
+# секреты — никогда не коммитить
+voice/.token
+voice/.google_tts_key
+tg-chat.txt
+.env
+
+# личное: голос владельца, состояние сессии, логи, кэш озвучки, модели
+voice/owner_voice.npy
+voice/config.json
+voice/out/
+voice/models/
+voice/panel.pid
+voice/mic.off
+*.log
+session.id
+compact.done
+restart.flag
+quit.flag

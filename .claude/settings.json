@@ -1,0 +1,24 @@
+{
+  "enabledMcpjsonServers": ["zews-voice"],
+  "env": {
+    "CLAUDE_CODE_DISABLE_TERMINAL_TITLE": "1"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/save-session.ps1\""
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python voice/voice.py:*)",
+      "mcp__zews-voice__say"
+    ]
+  }
+}

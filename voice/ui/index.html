@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Зевс</title>
+<style>
+  :root {
+    --bg: #0b0f17; --panel: #111827; --line: #1f2937; --text: #e5e7eb; --muted: #8b95a7;
+    --gold: #f5c451; --blue: #5ab0ff; --red: #ff5d6c; --green: #4ade80; --violet: #a78bfa;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.45 "Segoe UI", system-ui, sans-serif; overflow: hidden; user-select: none; }
+  body { display: flex; flex-direction: column; border: 1px solid #263044; border-radius: 10px; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+  /* шапка (за неё окно перетаскивается) */
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-bottom: 1px solid var(--line); }
+  .title { font-weight: 700; letter-spacing: .18em; color: var(--gold); flex: 1; }
+  .hbtn { width: 26px; height: 26px; border-radius: 6px; color: var(--muted); font-size: 14px; display: grid; place-items: center; }
+  .hbtn:hover { background: #1b2433; color: var(--text); }
+  .hbtn.on { color: var(--gold); }
+  .hbtn.close:hover { background: #3a1820; color: var(--red); }
+
+  /* сфера */
+  .stage { position: relative; height: 170px; display: grid; place-items: center; flex: none; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* статус Зевса — над шариком */
+  .state { position: absolute; top: 8px; left: 12px; right: 12px; text-align: center; color: var(--muted); font-size: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; transition: color .3s; }
+  .stop { position: absolute; bottom: 8px; right: 12px; padding: 3px 10px; border-radius: 12px;
+    background: #2a1a20; color: var(--red); font-size: 12px; display: none; }
+  .stage.speaking .stop { display: block; }
+  /* диктовка: тап по шарику — выполнить, маленький ✕ — отменить */
+  .orbhit { position: absolute; left: 50%; top: 50%; width: 110px; height: 110px; margin: -55px 0 0 -55px;
+    border-radius: 50%; display: none; cursor: pointer; }
+  .stage.dictating .orbhit { display: block; }
+  .orbhit::after { content: '✓'; position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 26px; color: #fff; opacity: 0; transition: opacity .2s; text-shadow: 0 0 12px var(--green); }
+  .orbhit:hover::after { opacity: .9; }
+  .dictno { position: absolute; bottom: 10px; right: 12px; width: 24px; height: 24px; border-radius: 50%;
+    display: none; place-items: center; font-size: 11px; color: var(--muted); border: 1px solid #2a3446; background: #111827cc; }
+  .dictno:hover { color: var(--red); border-color: var(--red); }
+  .stage.dictating .dictno { display: grid; }
+  .dicthint { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 11px;
+    color: var(--muted); opacity: .7; display: none; pointer-events: none; }
+  .stage.dictating .dicthint { display: block; }
+  .hbtn.off { color: var(--red); }
+
+  /* микрофон */
+  .mic { display: flex; align-items: center; gap: 8px; padding: 0 12px 8px; color: var(--muted); font-size: 11.5px; flex: none; }
+  .meter { position: relative; flex: 1; height: 5px; background: #1a2230; border-radius: 3px; overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--green), var(--gold), var(--red)); transition: width .07s; }
+  .meter b { position: absolute; top: 0; bottom: 0; width: 2px; background: #e5e7eb99; left: 8%; }
+  .micname { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+  .setmic { padding: 0; }
+  .dot.ok { background: var(--green); } .dot.bad { background: var(--red); }
+
+  /* лента */
+  .feed { flex: 1; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; user-select: text; }
+  .feed::-webkit-scrollbar { width: 6px; } .feed::-webkit-scrollbar-thumb { background: #263044; border-radius: 3px; }
+  .msg { max-width: 88%; padding: 7px 10px; border-radius: 10px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.you { align-self: flex-end; background: #1d3a5c; border-bottom-right-radius: 3px; }
+  .msg.zews { align-self: flex-start; background: #1b2230; border: 1px solid #2a3446; border-bottom-left-radius: 3px; }
+  .msg.zews .d { margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a3446; color: #c8d0dc; font-size: 12.5px; }
+  .msg.info { align-self: center; color: var(--muted); font-size: 11.5px; padding: 0; }
+  .msg.heard { align-self: flex-end; color: var(--muted); font-size: 11.5px; font-style: italic; padding: 0 2px; }
+  .msg.heard .why { font-style: normal; opacity: .7; }
+  .msg.you.dict { background: #1a2e44; border: 1px dashed #2f557f; }
+  /* варианты ответа (say.options) — кнопки под репликой Зевса */
+  .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .opts button { padding: 4px 10px; border-radius: 14px; background: #161e2b; border: 1px solid #2f3d57;
+    font-size: 12px; color: var(--text); text-align: left; transition: border-color .15s, background .15s; }
+  .opts button:hover { border-color: var(--gold); background: #1d2636; }
+  .opts button .n { color: var(--gold); margin-right: 5px; font-weight: 600; }
+  .opts.done button { opacity: .45; cursor: default; pointer-events: none; }
+  .opts.done button.picked { opacity: 1; border-color: var(--gold); background: #2b2412; }
+  .meta { font-size: 10.5px; color: var(--muted); margin-bottom: 2px; }
+  .empty { margin: auto; color: var(--muted); text-align: center; font-size: 12px; }
+
+  /* быстрые действия */
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line); flex: none; }
+  .quick button { padding: 4px 9px; border-radius: 14px; background: #161e2b; border: 1px solid #243046; font-size: 12px; }
+  .quick button:hover { border-color: var(--gold); }
+
+  /* ввод */
+  .input { display: flex; gap: 6px; padding: 0 12px 12px; align-items: flex-end; flex: none; }
+  textarea { flex: 1; resize: none; overflow-y: auto; scrollbar-width: none; height: 38px; max-height: 110px; padding: 9px 10px; border-radius: 10px;
+    background: #0f1520; color: var(--text); border: 1px solid #263044; font: inherit; outline: none; user-select: text; }
+  textarea:focus { border-color: var(--blue); }
+  .send, .ptt { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; font-size: 16px; flex: none; }
+  .send { background: #1d3a5c; } .send:hover { background: #23497a; }
+  .ptt { background: #2b2412; color: var(--gold); border: 1px solid #4a3d18; }
+  .ptt.rec { background: var(--red); color: #fff; border-color: var(--red); animation: rec 1s infinite; }
+  @keyframes rec { 50% { box-shadow: 0 0 0 6px rgba(255,93,108,.25); } }
+
+  /* настройки */
+  .settings { position: absolute; top: 43px; left: 0; right: 0; bottom: 0; background: rgba(11,15,23,.97);
+    padding: 14px; display: none; flex-direction: column; gap: 12px; z-index: 5; overflow-y: auto; }
+  .settings.open { display: flex; }
+  .settings h3 { margin: 0 0 2px; font-size: 13px; color: var(--gold); }
+  .settings label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+  select { background: #0f1520; color: var(--text); border: 1px solid #263044; border-radius: 8px; padding: 6px; font: inherit; }
+  .toggle { flex-direction: row !important; align-items: center; justify-content: space-between; color: var(--text) !important; font-size: 13px !important; }
+  .toggle input { width: 34px; height: 18px; accent-color: var(--gold); }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  input[type=range] { width: 100%; accent-color: var(--gold); }
+  .rowval { display: flex; justify-content: space-between; }
+  .calib { padding: 6px 10px; border-radius: 8px; background: #2b2412; color: var(--gold); border: 1px solid #4a3d18; align-self: flex-start; }
+  .calib:disabled { opacity: .5; cursor: default; }
+  .calib.armed { background: var(--red); color: #fff; border-color: var(--red); }
+</style>
+</head>
+<body>
+<header class="pywebview-drag-region">
+  <span class="title pywebview-drag-region">ЗЕВС</span>
+  <button class="hbtn" id="bPlay" title="Микрофон: выключить полностью">⏸</button>
+  <button class="hbtn" id="bMute" title="Озвучивать ответы">🔊</button>
+  <button class="hbtn" id="bPin" title="Поверх всех окон">📌</button>
+  <button class="hbtn" id="bSet" title="Настройки">⚙</button>
+  <button class="hbtn" id="bMin" title="Свернуть">—</button>
+  <button class="hbtn close" id="bHide" title="Спрятать (вернуть: значок Зевса в трее → «Открыть панель»)">✕</button>
+  <button class="hbtn close" id="bQuit" title="Выйти: закрыть панель и сессию Зевса (сессия сохранится)">⏻</button>
+</header>
+
+<div class="stage" id="stage">
+  <canvas id="orb"></canvas>
+  <span class="state" id="state">запуск…</span>
+  <button class="stop" id="bStop" title="Esc">■ стоп</button>
+  <div class="orbhit" id="bDictGo" title="Выполнить надиктованное (то же, что «выполняй»)"></div>
+  <span class="dicthint">тап по шарику — выполнить</span>
+  <button class="dictno" id="bDictNo" title="Отменить диктовку (Esc)">✕</button>
+</div>
+
+<div class="mic">
+  <span class="dot" id="micDot"></span>
+  <span class="micname" id="micName">микрофон…</span>
+  <div class="meter" title="Белая черта — порог: громче неё считается речью"><i id="meter"></i><b id="thr"></b></div>
+  <span id="wakeTag" title="Слушаю слово «Зевс»">«Зевс»</span>
+</div>
+
+<div class="feed" id="feed"><div class="empty" id="empty">Скажи «Зевс, …», удерживай 🎙 или напиши ниже</div></div>
+
+<div class="quick">
+  <button data-q="/brief">☀️ Сводка</button>
+  <button data-q="/tasks">✅ Задачи</button>
+  <button data-q="/mail">📬 Почта</button>
+  <button data-q="/cal">📅 Календарь</button>
+  <button data-q="/projects">🗂 Проекты</button>
+  <button data-q="/limits">📊 Лимиты</button>
+  <button id="bTerm">🖥 Терминал</button>
+</div>
+
+<div class="input">
+  <textarea id="txt" placeholder="Написать Зевсу…"></textarea>
+  <button class="send" id="bSend" title="Отправить">➤</button>
+  <button class="ptt" id="bPtt" title="Удерживай и говори (или клик — старт/стоп). Слово «Зевс» не нужно">🎙</button>
+</div>
+
+<div class="settings" id="settings">
+  <h3>Звук</h3>
+  <label>Микрофон<select id="selIn"></select></label>
+  <label>Колонки / наушники<select id="selOut"></select></label>
+  <h3>Чувствительность микрофона</h3>
+  <label><span class="rowval">Усиление<span id="vGain"></span></span><input type="range" id="rGain" min="1" max="30" step="0.5"></label>
+  <label><span class="rowval">Порог речи (меньше — чувствительнее)<span id="vThr"></span></span><input type="range" id="rThr" min="2" max="80" step="1"></label>
+  <div class="mic setmic">
+    <span class="dot" id="micDot2"></span>
+    <span class="micname" id="micName2">микрофон…</span>
+    <div class="meter" title="Белая черта — порог: громче неё считается речью"><i id="meter2"></i><b id="thr2"></b></div>
+  </div>
+  <button class="calib" id="bCalib">🎚 Калибровать</button>
+  <div class="hint" id="calibMsg">Калибровка: 3 с помолчать, потом сказать фразу обычным голосом — усиление и порог подберутся сами. Полоска микрофона должна доходить до середины, когда говоришь.</div>
+  <h3>Поведение</h3>
+  <label class="toggle">Режим диктовки<input type="checkbox" id="tDict"></label>
+  <div class="hint">«Зевс» — начать. Говори сколько угодно: после паузы 5 с Зевс переспросит, но выполнит только на «всё» / «выполняй».</div>
+  <label class="toggle">Слушать слово «Зевс»<input type="checkbox" id="tWake"></label>
+  <label class="toggle">Озвучивать ответы<input type="checkbox" id="tVoice"></label>
+  <label class="toggle">Поверх всех окон<input type="checkbox" id="tTop"></label>
+  <h3>Перезапуск</h3>
+  <button class="calib" data-restart="all">🔄 Перезапустить Зевса</button>
+  <div class="hint" id="restartMsg">Панель и сессия вместе, второй клик подтверждает. Сессия сохраняется: Зевс продолжит тот же диалог и напишет в Telegram, когда вернётся. ⏻ в шапке — выйти совсем.</div>
+  <div class="hint">Голосом: «Зевс, стоп» — замолчать и отменить диктовку; «Зевс, пауза» — ждать «Зевс, продолжай»; «Зевс, выключи микрофон» — закрыть микрофон совсем (включить — ⏸/▶ в шапке). Esc — прервать речь.<br><br>
+    Кнопка 🎙 работает и без слова «Зевс»: удерживай и говори, либо кликни для старта и ещё раз для остановки.<br><br>
+    Через RDP микрофон называется «Удаленное аудио» — в RDP-клиенте должна быть включена запись звука.</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const api = () => window.pywebview.api;
+const STATES = {
+  loading: ['загружаю модель…', '#8b95a7'], offline: ['Зевс не в сети', '#ff5d6c'],
+  idle: ['слушаю «Зевс»', '#5ab0ff'], wake: ['слушаю команду…', '#f5c451'],
+  recording: ['говори…', '#ff5d6c'], thinking: ['думаю…', '#a78bfa'], speaking: ['говорю', '#f5c451'],
+  dictating: ['диктовка… «всё» — выполню', '#4ade80'], paused: ['пауза — жду «Зевс, продолжай»', '#8b95a7'],
+  micoff: ['микрофон выключен', '#ff5d6c'],
+};
+let st = { state: 'loading', mic: 0, pulse: 0, muted: false, wake: true, onTop: true, micOn: true, dictation: true };
+
+// ---------- сфера ----------
+const cv = $('orb'), cx = cv.getContext('2d');
+let phase = 0, smoothPulse = 0, smoothMic = 0;
+function draw() {
+  const dpr = devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, w, h);
+  phase += 0.03;
+  smoothPulse += (st.pulse - smoothPulse) * 0.35;
+  smoothMic += (st.mic - smoothMic) * 0.3;
+  const s = st.state, color = (STATES[s] || STATES.idle)[1];
+  const X = w / 2, Y = h / 2, base = 46;
+  let r = base + Math.sin(phase) * 2;
+  if (s === 'speaking') r = base + smoothPulse * 26;
+  else if (s === 'recording' || s === 'wake' || s === 'dictating') r = base + smoothMic * 22;
+  else if (s === 'idle') r = base + smoothMic * 8 + Math.sin(phase) * 2;
+  else if (s === 'offline' || s === 'loading' || s === 'micoff' || s === 'paused') r = base - 4;
+
+  // свечение
+  const g = cx.createRadialGradient(X, Y, r * 0.2, X, Y, r * 2.1);
+  g.addColorStop(0, color + 'cc'); g.addColorStop(0.45, color + '33'); g.addColorStop(1, color + '00');
+  cx.fillStyle = g; cx.beginPath(); cx.arc(X, Y, r * 2.1, 0, Math.PI * 2); cx.fill();
+
+  // кольца-«волны» при речи Зевса
+  if (s === 'speaking') {
+    for (let i = 0; i < 3; i++) {
+      const k = ((phase * 0.6 + i / 3) % 1);
+      cx.strokeStyle = color + Math.floor((1 - k) * 120).toString(16).padStart(2, '0');
+      cx.lineWidth = 2; cx.beginPath(); cx.arc(X, Y, r + k * 50 * (0.4 + smoothPulse), 0, Math.PI * 2); cx.stroke();
+    }
+  }
+  // ядро с «молниями» по краю (амплитуда = голос)
+  cx.beginPath();
+  const amp = s === 'speaking' ? smoothPulse * 7 : (s === 'recording' || s === 'wake' || s === 'dictating') ? smoothMic * 6 : 1;
+  for (let a = 0; a <= Math.PI * 2 + 0.01; a += Math.PI / 48) {
+    const rr = r * 0.62 + Math.sin(a * 7 + phase * 3) * amp + Math.sin(a * 13 - phase * 2) * amp * 0.5;
+    const px = X + Math.cos(a) * rr, py = Y + Math.sin(a) * rr;
+    a === 0 ? cx.moveTo(px, py) : cx.lineTo(px, py);
+  }
+  const core = cx.createRadialGradient(X - r * 0.2, Y - r * 0.2, 2, X, Y, r * 0.7);
+  core.addColorStop(0, '#ffffff'); core.addColorStop(0.35, color); core.addColorStop(1, '#0b0f17');
+  cx.fillStyle = core; cx.fill();
+  // «думаю» — вращающаяся дуга
+  if (s === 'thinking' || s === 'loading') {
+    cx.strokeStyle = color; cx.lineWidth = 3; cx.lineCap = 'round';
+    cx.beginPath(); cx.arc(X, Y, r * 0.95, phase * 2.5, phase * 2.5 + Math.PI * 0.7); cx.stroke();
+  }
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+// ---------- лента ----------
+function add(kind, text, details, meta, why, options) {
+  $('empty')?.remove();
+  const el = document.createElement('div');
+  el.className = 'msg ' + kind;
+  if (meta) { const m = document.createElement('div'); m.className = 'meta'; m.textContent = meta; el.appendChild(m); }
+  el.appendChild(document.createTextNode(text));
+  if (why) { const w = document.createElement('span'); w.className = 'why'; w.textContent = ' — ' + why; el.appendChild(w); }
+  if (details) { const d = document.createElement('div'); d.className = 'd'; d.textContent = details; el.appendChild(d); }
+  if (options && options.length) {
+    // прошлые варианты больше не актуальны
+    document.querySelectorAll('.opts:not(.done)').forEach(o => o.classList.add('done'));
+    const box = document.createElement('div'); box.className = 'opts';
+    options.forEach((o, i) => {
+      const b = document.createElement('button');
+      b.innerHTML = '<span class="n">' + (i + 1) + '</span>'; b.appendChild(document.createTextNode(o));
+      b.onclick = () => { box.classList.add('done'); b.classList.add('picked'); api().choose(i + 1, o); };
+      box.appendChild(b);
+    });
+    el.appendChild(box);
+  }
+  const f = $('feed'); f.appendChild(el);
+  while (f.children.length > 80) f.firstChild.remove();
+  f.scrollTop = f.scrollHeight;
+}
+const SRC = { voice: '🎙 голос', text: '⌨ текст', button: '⚡ кнопка', dictation: '📝 диктовка', dictation_end: '✅ выполнить', choice: '👆 выбор' };
+const WHY = { nowake: 'мимо: не было «Зевс»', paused: 'мимо: пауза' };
+
+// ---------- события из Python ----------
+window.zews = {
+  ev(e) {
+    switch (e.type) {
+      case 'state': setState(e.state); break;
+      case 'level': st.mic = e.v; setMeter(e.v); break;
+      case 'pulse': st.pulse = e.v; break;
+      case 'you': add('you' + (e.source === 'dictation' ? ' dict' : ''), e.text, '', SRC[e.source] || ''); break;
+      case 'heard': if (!/^\W*$/.test(e.text)) add('heard', '«' + e.text + '»', '', '', WHY[e.why]); break;
+      case 'zews': add('zews', e.text, e.details, '⚡ Зевс', '', e.options); break;
+      case 'info': add('info', e.text); break;
+      case 'calib':
+        $('calibMsg').textContent = e.text;
+        $('bCalib').disabled = e.step === 'noise' || e.step === 'speech';
+        if (e.step === 'done' || e.step === 'fail') add('info', e.text);
+        break;
+      case 'mic':
+        for (const k of ['', '2']) {
+          $('micDot' + k).className = 'dot ' + (e.ok ? 'ok' : 'bad');
+          $('micName' + k).textContent = e.ok ? e.device : e.off ? 'микрофон выключен' : 'нет микрофона';
+          $('micName' + k).title = e.ok ? e.device : (e.error || '');
+        }
+        if (!e.ok) { st.mic = 0; setMeter(0); }
+        break;
+      case 'settings': applySettings(e); break;
+    }
+  },
+};
+// полоска микрофона — в ленте и в настройках (рядом с калибровкой)
+function setMeter(v) { for (const k of ['', '2']) $('meter' + k).style.width = Math.round(v * 100) + '%'; }
+function setThr(t) { for (const k of ['', '2']) $('thr' + k).style.left = Math.min(98, t * 8 * 100) + '%'; }  // как уровень: level * 8
+
+function setState(s) {
+  st.state = s;
+  const [label, color] = STATES[s] || [s, '#8b95a7'];
+  $('state').textContent = label; $('state').style.color = color;
+  $('stage').classList.toggle('speaking', s === 'speaking');
+  $('stage').classList.toggle('dictating', s === 'dictating');
+  $('bPtt').classList.toggle('rec', s === 'recording');
+}
+function fill(sel, items, current) {
+  sel.innerHTML = '';
+  const def = new Option('По умолчанию (системное)', ''); sel.add(def);
+  items.forEach(n => sel.add(new Option(n, n)));
+  sel.value = current || '';
+}
+function applySettings(s) {
+  st.muted = s.muted; st.wake = s.wake;
+  if ('mic_on' in s) {
+    st.micOn = s.mic_on;
+    $('bPlay').textContent = s.mic_on ? '⏸' : '▶';
+    $('bPlay').title = s.mic_on ? 'Микрофон: выключить полностью' : 'Микрофон выключен — включить';
+    $('bPlay').classList.toggle('off', !s.mic_on);
+  }
+  if ('gain' in s) { $('rGain').value = s.gain; $('vGain').textContent = '×' + s.gain; }
+  if ('threshold' in s) {
+    const t = Math.round(s.threshold * 1000);
+    $('rThr').value = t; $('vThr').textContent = t;
+    setThr(s.threshold);
+  }
+  if ('dictation' in s) { st.dictation = s.dictation; $('tDict').checked = s.dictation; }
+  if (s.devices) { fill($('selIn'), s.devices.inputs, s.input_device); fill($('selOut'), s.devices.outputs, s.output_device); }
+  $('tWake').checked = s.wake; $('tVoice').checked = !s.muted;
+  $('bMute').textContent = s.muted ? '🔇' : '🔊';
+  $('wakeTag').style.color = s.wake ? 'var(--blue)' : 'var(--muted)';
+  $('wakeTag').style.textDecoration = s.wake ? 'none' : 'line-through';
+  if ('on_top' in s) { st.onTop = s.on_top; $('tTop').checked = s.on_top; $('bPin').classList.toggle('on', s.on_top); }
+}
+
+// ---------- действия ----------
+function send() {
+  const t = $('txt').value.trim(); if (!t) return;
+  api().send_text(t); $('txt').value = ''; $('txt').style.height = '38px';
+}
+$('bSend').onclick = send;
+$('txt').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+$('txt').addEventListener('input', e => { e.target.style.height = '38px'; e.target.style.height = Math.min(110, e.target.scrollHeight) + 'px'; });
+document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => api().quick(b.dataset.q));
+$('bTerm').onclick = () => api().open_terminal();
+$('bStop').onclick = () => api().stop_speaking();
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (st.state === 'dictating') api().cancel_dictation(); else api().stop_speaking();
+});
+$('bPlay').onclick = () => api().set_mic(!st.micOn);
+$('bDictGo').onclick = () => api().finish_dictation();
+$('bDictNo').onclick = () => api().cancel_dictation();
+$('rGain').oninput = e => $('vGain').textContent = '×' + e.target.value;
+$('rThr').oninput = e => { $('vThr').textContent = e.target.value; setThr(e.target.value / 1000); };
+$('rGain').onchange = e => api().set_sensitivity(+e.target.value, null);
+$('rThr').onchange = e => api().set_sensitivity(null, e.target.value / 1000);
+$('bCalib').onclick = () => api().calibrate();
+$('tDict').onchange = e => api().set_dictation(e.target.checked);
+
+// 🎙: удерживать — говорить; короткий клик — старт/стоп
+let rec = false, clickMode = false, t0 = 0;
+function pttStop() { rec = false; clickMode = false; api().ptt_stop(); }
+$('bPtt').addEventListener('mousedown', () => {
+  if (rec && clickMode) return pttStop();          // второй клик — стоп
+  if (!rec) { rec = true; t0 = Date.now(); api().ptt_start(); }
+});
+$('bPtt').addEventListener('mouseup', () => {
+  if (!rec || clickMode) return;
+  if (Date.now() - t0 > 350) pttStop();            // удерживали — отпустили, стоп
+  else clickMode = true;                           // короткий клик — пишем до следующего клика
+});
+$('bPtt').addEventListener('mouseleave', () => { if (rec && !clickMode) pttStop(); });
+
+$('bMute').onclick = () => api().set_muted(!st.muted);
+$('bPin').onclick = () => { const v = !st.onTop; api().set_on_top(v); applySettings({ on_top: v, muted: st.muted, wake: st.wake }); };
+$('bSet').onclick = () => $('settings').classList.toggle('open');
+$('bMin').onclick = () => api().minimize();
+$('bHide').onclick = () => api().hide();
+// Перезапуск: первый клик — подсветить, второй в течение 3 с — перезапустить
+document.querySelectorAll('[data-restart]').forEach(b => {
+  let arm = 0;
+  b.onclick = () => {
+    if (Date.now() < arm) {
+      document.querySelectorAll('[data-restart]').forEach(x => x.disabled = true);
+      $('restartMsg').textContent = 'Перезапускаю… панель закроется и откроется сама.';
+      api().restart(b.dataset.restart);
+      return;
+    }
+    arm = Date.now() + 3000;
+    b.classList.add('armed');
+    setTimeout(() => b.classList.remove('armed'), 3000);
+  };
+});
+// ⏻: первый клик — спросить, второй в течение 3 с — закрыть всё
+let quitArm = 0;
+$('bQuit').onclick = () => {
+  if (Date.now() < quitArm) {
+    $('state').textContent = 'закрываю всё…';
+    api().quit_all();
+    return;
+  }
+  quitArm = Date.now() + 3000;
+  const prev = $('state').textContent;
+  $('bQuit').classList.add('off');
+  $('state').textContent = 'ещё раз ⏻ — закрыть всё';
+  setTimeout(() => {
+    $('bQuit').classList.remove('off');
+    if (Date.now() >= quitArm && $('state').textContent === 'ещё раз ⏻ — закрыть всё') $('state').textContent = prev;
+  }, 3000);
+};
+$('selIn').onchange = e => api().set_device('input', e.target.value);
+$('selOut').onchange = e => api().set_device('output', e.target.value);
+$('tWake').onchange = e => api().set_wake(e.target.checked);
+$('tVoice').onchange = e => api().set_muted(!e.target.checked);
+$('tTop').onchange = e => { api().set_on_top(e.target.checked); applySettings({ on_top: e.target.checked, muted: st.muted, wake: st.wake }); };
+
+window.addEventListener('pywebviewready', async () => {
+  const s = await api().init();
+  applySettings(s); setState(s.state);
+});
+</script>
+</body>
+</html>
