@@ -21,3 +21,6 @@ session.id
 compact.done
 restart.flag
 quit.flag
+
+# настройки установщика (setup.ps1)
+voice/assistant.json

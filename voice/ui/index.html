@@ -114,7 +114,7 @@
 </head>
 <body>
 <header class="pywebview-drag-region">
-  <span class="title pywebview-drag-region">ЗЕВС</span>
+  <span class="title pywebview-drag-region" id="title">ЗЕВС</span>
   <button class="hbtn" id="bPlay" title="Микрофон: выключить полностью">⏸</button>
   <button class="hbtn" id="bMute" title="Озвучивать ответы">🔊</button>
   <button class="hbtn" id="bPin" title="Поверх всех окон">📌</button>
@@ -430,6 +430,7 @@ $('tTop').onchange = e => { api().set_on_top(e.target.checked); applySettings({ 
 
 window.addEventListener('pywebviewready', async () => {
   const s = await api().init();
+  if (s.name) { $('title').textContent = s.name.toUpperCase(); document.title = s.name; }
   applySettings(s); setState(s.state);
 });
 </script>

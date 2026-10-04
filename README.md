@@ -30,16 +30,17 @@ voice/zews_app.py — панель (окно + ядро listener), zews-tray.ps1
 
 ## Установка (Windows 10/11)
 1. Нужны: [Claude Code](https://claude.com/claude-code), Python 3.11+, [Bun](https://bun.sh), Windows Terminal.
-2. Зависимости:
+2. Установщик — спросит имя помощника, ключ Google для голоса, Telegram и поставит зависимости:
    ```
-   pip install -r requirements.txt
-   cd voice && bun install
+   powershell -ExecutionPolicy Bypass -File setup.ps1
    ```
-3. (Необязательно) Google Cloud TTS: включи Cloud Text-to-Speech API, создай API-ключ с ограничением
-   на этот API и положи его в `voice/.google_tts_key`. Без ключа — edge-tts.
-4. (Необязательно) Telegram: поставь плагин `telegram@claude-plugins-official` в Claude Code.
-   Чтобы получать сообщения о сбоях перезапуска — `tg-chat.txt` с твоим chat_id рядом со скриптами.
-5. Запуск: двойной клик по `zews.vbs` (можно положить ярлык в автозагрузку).
+   - **Имя** — на него помощник откликается (слово-активатор) и так себя называет (`CLAUDE.md` из
+     `CLAUDE.template.md`). Хранится в `voice/assistant.json`; по умолчанию «Зевс».
+   - **Google Cloud TTS** (необязательно): API-ключ с доступом к Cloud Text-to-Speech API → `voice/.google_tts_key`.
+     Без ключа — бесплатный edge-tts.
+   - **Claude**: ключ не нужен — работает по подписке; достаточно один раз войти в `claude`.
+   - **Telegram** (необязательно): плагин `telegram@claude-plugins-official`; chat_id для сообщений о сбоях — `tg-chat.txt`.
+3. Запуск: двойной клик по `zews.vbs` (можно положить ярлык в автозагрузку).
    Первый запуск Claude спросит про development channel — трей подтверждает сам.
 
 Голос владельца запоминается сам: после 3 принятых команд в панели появится «Запомнил твой голос».

@@ -21,6 +21,7 @@ import webview
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from listener import Core, load_config, save_config, setup_logging  # noqa: E402
+from assistant import NAME  # noqa: E402
 
 LOCK_PORT = 8791
 QUIT_FLAG = HERE.parent / "quit.flag"  # для zews-tray.ps1: «закрыть всё»
@@ -40,7 +41,7 @@ def push(ev):
 class Api:
     def init(self):
         cfg = load_config()
-        return {**core.settings(), "state": core.state, "on_top": cfg.get("on_top", True)}
+        return {**core.settings(), "state": core.state, "on_top": cfg.get("on_top", True), "name": NAME}
 
     def send_text(self, text):
         text = (text or "").strip()
@@ -231,7 +232,7 @@ def main():
     cfg = load_config()
     core = Core(on_event=push)
     window = webview.create_window(
-        "Зевс", str(HERE / "ui" / "index.html"), js_api=Api(),
+        NAME, str(HERE / "ui" / "index.html"), js_api=Api(),
         width=cfg.get("w", 380), height=cfg.get("h", 640), x=cfg.get("x"), y=cfg.get("y"),
         min_size=(320, 420), frameless=True, easy_drag=False, on_top=cfg.get("on_top", True),
         background_color="#0b0f17",

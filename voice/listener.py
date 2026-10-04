@@ -44,6 +44,7 @@ sys.path.insert(0, str(HERE))
 from voice import _add_cuda_dlls, synth, WHISPER_MODEL  # noqa: E402  (WHISPER_MODEL — запасная для CPU)
 from audio_prep import prepare  # noqa: E402
 from speaker_id import SpeakerID  # noqa: E402
+from assistant import WAKE_CORE  # noqa: E402  (имя и слово-активатор — assistant.json, см. setup.ps1)
 
 BASE = "http://127.0.0.1:8790"
 CONFIG = HERE / "config.json"
@@ -64,7 +65,7 @@ GAIN = 1.0                          # программное усиление м
 THRESHOLD = 0.01                    # нижний порог громкости начала речи (после усиления)
 LISTEN_MODEL = os.environ.get("ZEWS_LISTEN_MODEL", "large-v3-turbo")
 WAKE = re.compile(
-    r"^\W*(?:(?:эй|слушай|и|а|ну|о|ой|так)\W+){0,2}(з[еэё][вф][сз]\w*|зевес\w*|zeus|зеус)\b\W*", re.I)
+    r"^\W*(?:(?:эй|слушай|и|а|ну|о|ой|так)\W+){0,2}(" + WAKE_CORE + r")\b\W*", re.I)
 # Whisper в тишине и шуме «слышит» титры с YouTube
 HALLUCINATION = re.compile(
     r"субтитр|dimatorzok|продолжение следует|спасибо за просмотр|подпис\w* на канал|редактор\w* субтитров|amara\.org",
@@ -79,8 +80,9 @@ CMD_RESUME = re.compile(
 CMD_DONE = re.compile(
     r"(это )?все( (выполняй|делай|поехали|приступай))?|выполняй|приступай|поехали|делай|давай делай"
     r"|нет|нет все|нет спасибо|больше ничего|нет больше ничего|ничего")
-WAKE_ANY = re.compile(r"\b(з[еэё][вф][сз]\w*|зевес\w*|zeus|зеус)\b", re.I)  # «Зевс» в любом месте фразы
+WAKE_ANY = re.compile(r"\b(" + WAKE_CORE + r")\b", re.I)  # имя помощника в любом месте фразы
 VOICE_MARGIN = 0.1                  # насколько звук должен быть ближе к владельцу, чем к голосу Зевса (config: voice_margin)
+VOICE_SURE = 0.2                    # разница, при которой хватает одной проверки
 VOICE_THRESHOLD = 0.15              # похожесть на голос владельца, с которой Зевс замолкает (config: voice_threshold)
 OWNER_WAIT = 8.0                    # с: перебил, но так ничего и не сказал — Зевс договаривает
 # Реплики-заполнители по смыслу фразы владельца (первое совпадение сверху), иначе — общие
@@ -109,6 +111,16 @@ BARGE_MAX = 3.0                     # с: куски речи во время о
 DONE_TAIL = re.compile(r"[\s,.!?…-]*\b(выполняй|приступай|поехали)\W*$", re.I)
 
 log = logging.getLogger("zews")
+
+_TR = str.maketrans({"а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh", "з": "z",
+                     "и": "i", "й": "i", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
+                     "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "c", "ч": "ch", "ш": "sh", "щ": "sh",
+                     "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya", "x": "ks", "w": "v", "q": "k"})
+
+
+def translit(s):
+    """Грубая латинизация для сравнения слов на слух (не для показа)."""
+    return s.translate(_TR)
 
 
 def norm(text):
@@ -473,10 +485,13 @@ class Core:
 
     def is_echo(self, text):
         """Фраза — это мои же слова из колонок (большинство слов есть в том, что Зевс сейчас говорит)."""
-        words = re.findall(r"\w+", text.lower())
-        said = set(re.findall(r"\w+", getattr(self, "speaking_text", "").lower()))
-        # слово могло оборваться («до…» из «добрый») — сравниваем и по началу
-        hit = sum(any(s == w or (len(w) >= 2 and s.startswith(w)) for s in said) for w in words)
+        # латиница и кириллица сравниваются в одной записи: «VoxCode» в речи ≈ «вокс-код» в распознанном
+        words = re.findall(r"\w+", translit(text.lower()))
+        said = set(re.findall(r"\w+", translit(getattr(self, "speaking_text", "").lower())))
+        # слово могло оборваться («до…» из «добрый») или распознаться по-другому («voks» из «voxcode») —
+        # сравниваем и по началу
+        hit = sum(any(s == w or (len(w) >= 2 and s.startswith(w)) or (len(w) >= 4 and s[:4] == w[:4])
+                      for s in said) for w in words)
         return bool(words) and hit >= max(1, len(words) * 0.6)
 
     # ---------- реплики-заполнители ----------
@@ -879,6 +894,7 @@ class Core:
         barge = False  # сейчас разбираем речь во время озвучки
         owner = False  # владелец перебил голосом: дослушиваем его фразу, Зевс на паузе
         roll, hop = [], 0  # последние ~1.5 с во время озвучки — для узнавания голоса
+        prev_ok = False  # прошлая проверка тоже была «похоже на владельца»
         with sd.InputStream(samplerate=SR, channels=1, dtype="float32", blocksize=BLOCK,
                             callback=cb, device=dev):
             name = sd.query_devices(dev if dev is not None else sd.default.device[0])["name"]
@@ -899,7 +915,7 @@ class Core:
                     if owner:
                         is_barge = False  # Зевс ещё не успел замолчать — это уже фраза владельца
                 if is_barge != barge:  # озвучка началась/кончилась — начинаем кусок заново
-                    pre, buf, in_speech, barge, roll, hop = [], [], False, is_barge, [], 0
+                    pre, buf, in_speech, barge, roll, hop, prev_ok = [], [], False, is_barge, [], 0, False
                 if self.ptt:
                     self.ptt_buf.append(block)
                     continue
@@ -920,8 +936,12 @@ class Core:
                             sc, zs = self.spk.compare(win, self.tts_emb)
                             if sc is not None:
                                 self.barge_scores.append(sc - zs)
-                            if (sc is not None and sc >= float(self.cfg.get("voice_threshold", VOICE_THRESHOLD))
-                                    and sc - zs >= float(self.cfg.get("voice_margin", VOICE_MARGIN))):
+                            ok = (sc is not None and sc >= float(self.cfg.get("voice_threshold", VOICE_THRESHOLD))
+                                  and sc - zs >= float(self.cfg.get("voice_margin", VOICE_MARGIN)))
+                            # уверенно (разница ≥ 0.2) — сразу; на грани — только две проверки подряд (~0.5 с):
+                            # одиночные всплески эха в начале фразы так не срабатывают
+                            sure, prev_ok = ok and (sc - zs >= VOICE_SURE or prev_ok), ok
+                            if sure:
                                 log.info("перебил голосом (владелец %.2f, Зевс %.2f) — пауза", sc, zs)
                                 owner, barge = True, False
                                 self.follow_until = time.time() + FOLLOW_UP  # без «Зевс»
