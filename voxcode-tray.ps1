@@ -1,4 +1,4 @@
-﻿# Зевс в трее: запускает Зевса в отдельном окне Windows Terminal
+﻿# помощник в трее: запускает помощника в отдельном окне Windows Terminal
 # и прячет в трей только это окно (при сворачивании).
 param([switch]$Minimized)
 $Root = $PSScriptRoot
@@ -19,31 +19,31 @@ public static class W {
 }
 '@
 
-$Title = 'Zews Core'
+$Title = 'VoxCode Core'
 # Второй экземпляр трея не запускаем
-$mutex = New-Object System.Threading.Mutex($false, 'Global\ZewsTray')
+$mutex = New-Object System.Threading.Mutex($false, 'Global\VoxCodeTray')
 if (-not $mutex.WaitOne(0)) { exit }
 
-function Find-Zews { [W]::FindWindow('CASCADIA_HOSTING_WINDOW_CLASS', $Title) }
+function Find-Core { [W]::FindWindow('CASCADIA_HOSTING_WINDOW_CLASS', $Title) }
 
 # Сессия всегда продолжается: ID сохраняет хук SessionStart (save-session.ps1) в session.id.
 # Есть ID и его транскрипт — --resume именно её, иначе --continue (последняя в папке).
 # Начать с чистого листа — /clear в самой сессии (хук запишет новый ID).
 # -Hidden: окно сразу в трей (видно только на миг, когда жмём Enter)
-function Start-Zews([switch]$Hidden) {
-  $cmd = 'claude --dangerously-load-development-channels server:zews-voice'
+function Start-Core([switch]$Hidden) {
+  $cmd = 'claude --dangerously-load-development-channels server:voxcode'
   # Telegram — если плагин настроен (/telegram:configure)
   if (Test-Path "$env:USERPROFILE\.claude\channels\telegram\.env") { $cmd = $cmd.Replace('claude ', 'claude --channels plugin:telegram@claude-plugins-official ') }
   $sid = (Get-Content "$Root\session.id" -ErrorAction SilentlyContinue | Select-Object -First 1)
   if ($sid -and (Test-Path "$env:USERPROFILE\.claude\projects\$(($Root -replace '[^A-Za-z0-9]', '-'))\$($sid.Trim()).jsonl")) { $cmd += " --resume $($sid.Trim())" }
   else { $cmd += ' --continue' }
   Start-Process "$env:LOCALAPPDATA\Microsoft\WindowsApps\wt.exe" -ArgumentList @(
-    '-w', 'zews', '--title', "`"$Title`"", '--suppressApplicationTitle',
+    '-w', 'voxcode', '--title', "`"$Title`"", '--suppressApplicationTitle',
     '-d', $Root,
     'powershell', '-NoExit', '-Command', $cmd
   )
   $h = [IntPtr]::Zero
-  for ($i = 0; $i -lt 60 -and $h -eq [IntPtr]::Zero; $i++) { Start-Sleep -Milliseconds 100; $h = Find-Zews }
+  for ($i = 0; $i -lt 60 -and $h -eq [IntPtr]::Zero; $i++) { Start-Sleep -Milliseconds 100; $h = Find-Core }
   if ($h -ne [IntPtr]::Zero) {
     if ($Hidden) { [W]::ShowWindow($h, 0) | Out-Null }
     Confirm-DevChannel $h -Hidden:$Hidden
@@ -53,7 +53,7 @@ function Start-Zews([switch]$Hidden) {
 
 # На старте Claude показывает предупреждение про development channel;
 # первый пункт — «I am using this for local development», Enter его выбирает.
-# Лишний Enter в пустую строку ввода безвреден. Жмём только если активно окно Зевса.
+# Лишний Enter в пустую строку ввода безвреден. Жмём только если активно окно помощника.
 # SendKeys требует активного окна, поэтому при -Hidden показываем его на миг и прячем обратно.
 function Confirm-DevChannel($h, [switch]$Hidden) {
   $ws = New-Object -ComObject WScript.Shell
@@ -67,7 +67,7 @@ function Confirm-DevChannel($h, [switch]$Hidden) {
   }
 }
 
-# Панель Зевса (voice\zews_app.py) — главное окно, в ней же слушатель микрофона.
+# Панель помощника (voice\voxcode_app.py) — главное окно, в ней же слушатель микрофона.
 # Повторный запуск панели просто показывает её окно. Запущена ли — смотрим по её порту
 # (CommandLine панели, запущенной от администратора, отсюда не видно).
 . "$Root\panel.ps1"
@@ -76,22 +76,22 @@ $QuitFlag = "$Root\quit.flag"
 Remove-Item $QuitFlag -ErrorAction SilentlyContinue
 if (-not (Test-Panel)) { Start-Panel }
 
-$hwnd = Find-Zews
+$hwnd = Find-Core
 if ($hwnd -eq [IntPtr]::Zero) {
-  $hwnd = Start-Zews -Hidden:$Minimized
+  $hwnd = Start-Core -Hidden:$Minimized
   if ($hwnd -eq [IntPtr]::Zero) { exit 1 }
 }
 
 $icon = New-Object System.Windows.Forms.NotifyIcon
-$ico = "$Root\assets\zews.ico"
+$ico = "$Root\assets\voxcode.ico"
 $icon.Icon = if (Test-Path $ico) { New-Object System.Drawing.Icon($ico, 32, 32) } else { [System.Drawing.Icon]::ExtractAssociatedIcon("$env:SystemRoot\System32\cmd.exe") }
-$icon.Text = 'Зевс'
+$icon.Text = 'VoxCode'
 $icon.Visible = $true
 
-function Show-Zews { [W]::ShowWindow($hwnd, 9) | Out-Null; [W]::SetForegroundWindow($hwnd) | Out-Null }
-function Hide-Zews { [W]::ShowWindow($hwnd, 0) | Out-Null }
+function Show-Core { [W]::ShowWindow($hwnd, 9) | Out-Null; [W]::SetForegroundWindow($hwnd) | Out-Null }
+function Hide-Core { [W]::ShowWindow($hwnd, 0) | Out-Null }
 
-# Закрыть всё: сессию Claude (окно «Zews Core»), панель и сам трей
+# Закрыть всё: сессию Claude (окно «VoxCode Core»), панель и сам трей
 function Close-All {
   $script:stopping = $true
   Remove-Item $QuitFlag -ErrorAction SilentlyContinue
@@ -105,11 +105,11 @@ $menu = New-Object System.Windows.Forms.ContextMenuStrip
 $menu.Items.Add('Открыть панель', $null, { Start-Panel }) | Out-Null
 $menu.Items.Add('-') | Out-Null
 $menu.Items.Add('Закрыть всё', $null, {
-  $r = [System.Windows.Forms.MessageBox]::Show('Закрыть Зевса полностью: панель и терминал? Бот в Telegram перестанет отвечать.', 'Зевс', 'YesNo', 'Question')
+  $r = [System.Windows.Forms.MessageBox]::Show('Закрыть VoxCode полностью: панель и терминал? Бот в Telegram перестанет отвечать.', 'VoxCode', 'YesNo', 'Question')
   if ($r -eq 'Yes') {
     & powershell -NoProfile -ExecutionPolicy Bypass -File "$Root\compact.ps1" -Check
     if ($LASTEXITCODE -eq 10) {
-      $icon.ShowBalloonTip(3000, 'Зевс', 'Сжимаю контекст сессии и закрываюсь…', 'Info')
+      $icon.ShowBalloonTip(3000, 'VoxCode', 'Сжимаю контекст сессии и закрываюсь…', 'Info')
       & powershell -NoProfile -ExecutionPolicy Bypass -File "$Root\compact.ps1"
     }
     Close-All
@@ -118,9 +118,9 @@ $menu.Items.Add('Закрыть всё', $null, {
 $icon.ContextMenuStrip = $menu
 $icon.add_MouseClick({ param($s, $e) if ($e.Button -eq 'Left') { Start-Panel } })
 
-if ($Minimized) { Hide-Zews }
+if ($Minimized) { Hide-Core }
 
-# Свернули окно Зевса — прячем в трей; закрыли крестиком — перезапускаем
+# Свернули окно помощника — прячем в трей; закрыли крестиком — перезапускаем
 $script:stopping = $false
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 500
@@ -130,16 +130,16 @@ $timer.add_Tick({
   if (-not [W]::IsWindow($hwnd)) {
     if ($script:stopping) { return }
     $timer.Stop()
-    # restart.flag ставит restart.ps1: Зевс перезапускает себя сам — поднимаем скрыто
+    # restart.flag ставит restart.ps1: помощник перезапускает себя сам — поднимаем скрыто
     $self = Test-Path "$Root\restart.flag"
     Remove-Item "$Root\restart.flag" -ErrorAction SilentlyContinue
-    if (-not $self) { $icon.ShowBalloonTip(3000, 'Зевс', 'Окно закрыто — перезапускаю с продолжением диалога', 'Info') }
-    $script:hwnd = Start-Zews -Hidden:$self
+    if (-not $self) { $icon.ShowBalloonTip(3000, 'VoxCode', 'Окно закрыто — перезапускаю с продолжением диалога', 'Info') }
+    $script:hwnd = Start-Core -Hidden:$self
     if ($script:hwnd -eq [IntPtr]::Zero) { $icon.Visible = $false; [System.Windows.Forms.Application]::Exit(); return }
     $timer.Start()
     return
   }
-  if ([W]::IsWindowVisible($hwnd) -and [W]::IsIconic($hwnd)) { Hide-Zews }
+  if ([W]::IsWindowVisible($hwnd) -and [W]::IsIconic($hwnd)) { Hide-Core }
 })
 $timer.Start()
 

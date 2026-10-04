@@ -1,7 +1,7 @@
-﻿# Сжать контекст сессии Зевса (/compact) перед перезапуском или выходом.
-# Вставляем «/compact» в окно «Zews Core» и ждём compact.done от хука save-session.ps1.
+﻿# Сжать контекст сессии помощника (/compact) перед перезапуском или выходом.
+# Вставляем «/compact» в окно «VoxCode Core» и ждём compact.done от хука save-session.ps1.
 # Вставка через буфер и виртуальные клавиши — от раскладки не зависит.
-# Если Зевс занят, команда встанет в очередь и выполнится после его ответа — поэтому ждём до 3 мин.
+# Если помощник занят, команда встанет в очередь и выполнится после его ответа — поэтому ждём до 3 мин.
 # Вызывают restart.ps1, панель (⏻) и трей («Закрыть всё»).
 # -Check: ничего не делать, только ответить кодом выхода: 10 — сжатие нужно, 0 — нет
 # (панель и трей по нему решают, показывать ли «Сжимаю контекст…»).
@@ -24,7 +24,7 @@ $Root = $PSScriptRoot
 function Log($m) { Add-Content -Encoding utf8 "$Root\restart.log" "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $m" }
 function Key($vk, $up) { [WC]::keybd_event($vk, 0, $(if ($up) { 2 } else { 0 }), [UIntPtr]::Zero) }
 
-$h = [WC]::FindWindow('CASCADIA_HOSTING_WINDOW_CLASS', 'Zews Core')
+$h = [WC]::FindWindow('CASCADIA_HOSTING_WINDOW_CLASS', 'VoxCode Core')
 if ($h -eq [IntPtr]::Zero) { if (-not $Check) { Log 'сжатие: окна нет, пропускаю' }; exit 0 }
 
 # Сжимаем, только если контекст заполнен на 60%+ (окно модели — 200k токенов).

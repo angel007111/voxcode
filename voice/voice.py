@@ -1,4 +1,4 @@
-"""Голос Зевса: распознавание голосовых и озвучка ответов.
+"""Голос помощника: распознавание голосовых и озвучка ответов.
 
   python voice.py transcribe <audio>            -> печатает текст
   python voice.py speak "<текст>" [out.mp3]     -> печатает путь к mp3
@@ -11,19 +11,19 @@ import tempfile
 import time
 from pathlib import Path
 
-WHISPER_MODEL = os.environ.get("ZEWS_WHISPER_MODEL", "small")
-VOICE = os.environ.get("ZEWS_VOICE", "ru-RU-DmitryNeural")
+WHISPER_MODEL = os.environ.get("VOXCODE_WHISPER_MODEL", "small")
+VOICE = os.environ.get("VOXCODE_VOICE", "ru-RU-DmitryNeural")
 # запасной голос: edge-tts порой отвечает пустотой на конкретном голосе, а соседние работают
-FALLBACK_VOICE = os.environ.get("ZEWS_FALLBACK_VOICE", "en-US-AndrewMultilingualNeural")
+FALLBACK_VOICE = os.environ.get("VOXCODE_FALLBACK_VOICE", "en-US-AndrewMultilingualNeural")
 _primary_bad_until = 0.0
 # Google Cloud TTS (официальный API, бесплатно до 1 млн симв./мес для Chirp 3 HD):
-# ключ — в voice/.google_tts_key (в .gitignore) или ZEWS_GOOGLE_TTS_KEY. Нет ключа — сразу edge-tts.
-GOOGLE_VOICE = os.environ.get("ZEWS_GOOGLE_VOICE", "ru-RU-Chirp3-HD-Charon")
+# ключ — в voice/.google_tts_key (в .gitignore) или VOXCODE_GOOGLE_TTS_KEY. Нет ключа — сразу edge-tts.
+GOOGLE_VOICE = os.environ.get("VOXCODE_GOOGLE_VOICE", "ru-RU-Chirp3-HD-Charon")
 GOOGLE_KEY_FILE = Path(__file__).parent / ".google_tts_key"
 
 
 def google_key():
-    key = os.environ.get("ZEWS_GOOGLE_TTS_KEY", "").strip()
+    key = os.environ.get("VOXCODE_GOOGLE_TTS_KEY", "").strip()
     if not key and GOOGLE_KEY_FILE.exists():
         key = GOOGLE_KEY_FILE.read_text(encoding="utf-8").strip()
     return key
@@ -108,7 +108,7 @@ def transcribe(path):
 
 
 def speak(text, out=None):
-    out = out or os.path.join(tempfile.gettempdir(), "zews_reply.mp3")
+    out = out or os.path.join(tempfile.gettempdir(), "voxcode_reply.mp3")
     synth(text, out)
     print(out)
 

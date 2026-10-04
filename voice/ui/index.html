@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Зевс</title>
+<title>VoxCode</title>
 <style>
   :root {
     --bg: #0b0f17; --panel: #111827; --line: #1f2937; --text: #e5e7eb; --muted: #8b95a7;
@@ -25,7 +25,7 @@
   /* сфера */
   .stage { position: relative; height: 170px; display: grid; place-items: center; flex: none; }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-  /* статус Зевса — над шариком */
+  /* статус помощника — над шариком */
   .state { position: absolute; top: 8px; left: 12px; right: 12px; text-align: center; color: var(--muted); font-size: 12px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; transition: color .3s; }
   .stop { position: absolute; bottom: 8px; right: 12px; padding: 3px 10px; border-radius: 12px;
@@ -62,13 +62,13 @@
   .feed::-webkit-scrollbar { width: 6px; } .feed::-webkit-scrollbar-thumb { background: #263044; border-radius: 3px; }
   .msg { max-width: 88%; padding: 7px 10px; border-radius: 10px; white-space: pre-wrap; word-wrap: break-word; }
   .msg.you { align-self: flex-end; background: #1d3a5c; border-bottom-right-radius: 3px; }
-  .msg.zews { align-self: flex-start; background: #1b2230; border: 1px solid #2a3446; border-bottom-left-radius: 3px; }
-  .msg.zews .d { margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a3446; color: #c8d0dc; font-size: 12.5px; }
+  .msg.bot { align-self: flex-start; background: #1b2230; border: 1px solid #2a3446; border-bottom-left-radius: 3px; }
+  .msg.bot .d { margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a3446; color: #c8d0dc; font-size: 12.5px; }
   .msg.info { align-self: center; color: var(--muted); font-size: 11.5px; padding: 0; }
   .msg.heard { align-self: flex-end; color: var(--muted); font-size: 11.5px; font-style: italic; padding: 0 2px; }
   .msg.heard .why { font-style: normal; opacity: .7; }
   .msg.you.dict { background: #1a2e44; border: 1px dashed #2f557f; }
-  /* варианты ответа (say.options) — кнопки под репликой Зевса */
+  /* варианты ответа (say.options) — кнопки под репликой помощника */
   .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .opts button { padding: 4px 10px; border-radius: 14px; background: #161e2b; border: 1px solid #2f3d57;
     font-size: 12px; color: var(--text); text-align: left; transition: border-color .15s, background .15s; }
@@ -114,14 +114,14 @@
 </head>
 <body>
 <header class="pywebview-drag-region">
-  <span class="title pywebview-drag-region" id="title">ЗЕВС</span>
+  <span class="title pywebview-drag-region" id="title">VOXCODE</span>
   <button class="hbtn" id="bPlay" title="Микрофон: выключить полностью">⏸</button>
   <button class="hbtn" id="bMute" title="Озвучивать ответы">🔊</button>
   <button class="hbtn" id="bPin" title="Поверх всех окон">📌</button>
   <button class="hbtn" id="bSet" title="Настройки">⚙</button>
   <button class="hbtn" id="bMin" title="Свернуть">—</button>
-  <button class="hbtn close" id="bHide" title="Спрятать (вернуть: значок Зевса в трее → «Открыть панель»)">✕</button>
-  <button class="hbtn close" id="bQuit" title="Выйти: закрыть панель и сессию Зевса (сессия сохранится)">⏻</button>
+  <button class="hbtn close" id="bHide" title="Спрятать (вернуть: значок помощника в трее → «Открыть панель»)">✕</button>
+  <button class="hbtn close" id="bQuit" title="Выйти: закрыть панель и сессию помощника (сессия сохранится)">⏻</button>
 </header>
 
 <div class="stage" id="stage">
@@ -137,10 +137,10 @@
   <span class="dot" id="micDot"></span>
   <span class="micname" id="micName">микрофон…</span>
   <div class="meter" title="Белая черта — порог: громче неё считается речью"><i id="meter"></i><b id="thr"></b></div>
-  <span id="wakeTag" title="Слушаю слово «Зевс»">«Зевс»</span>
+  <span id="wakeTag" title="Слушаю слово «{N}»">«{N}»</span>
 </div>
 
-<div class="feed" id="feed"><div class="empty" id="empty">Скажи «Зевс, …», удерживай 🎙 или напиши ниже</div></div>
+<div class="feed" id="feed"><div class="empty" id="empty">Скажи «{N}, …», удерживай 🎙 или напиши ниже</div></div>
 
 <div class="quick">
   <button data-q="/brief">☀️ Сводка</button>
@@ -153,9 +153,9 @@
 </div>
 
 <div class="input">
-  <textarea id="txt" placeholder="Написать Зевсу…"></textarea>
+  <textarea id="txt" placeholder="Написать помощнику…"></textarea>
   <button class="send" id="bSend" title="Отправить">➤</button>
-  <button class="ptt" id="bPtt" title="Удерживай и говори (или клик — старт/стоп). Слово «Зевс» не нужно">🎙</button>
+  <button class="ptt" id="bPtt" title="Удерживай и говори (или клик — старт/стоп). Слово «{N}» не нужно">🎙</button>
 </div>
 
 <div class="settings" id="settings">
@@ -174,15 +174,15 @@
   <div class="hint" id="calibMsg">Калибровка: 3 с помолчать, потом сказать фразу обычным голосом — усиление и порог подберутся сами. Полоска микрофона должна доходить до середины, когда говоришь.</div>
   <h3>Поведение</h3>
   <label class="toggle">Режим диктовки<input type="checkbox" id="tDict"></label>
-  <div class="hint">«Зевс» — начать. Говори сколько угодно: после паузы 5 с Зевс переспросит, но выполнит только на «всё» / «выполняй».</div>
-  <label class="toggle">Слушать слово «Зевс»<input type="checkbox" id="tWake"></label>
+  <div class="hint">«{N}» — начать. Говори сколько угодно: после паузы 5 с помощник переспросит, но выполнит только на «всё» / «выполняй».</div>
+  <label class="toggle">Слушать слово «{N}»<input type="checkbox" id="tWake"></label>
   <label class="toggle">Озвучивать ответы<input type="checkbox" id="tVoice"></label>
   <label class="toggle">Поверх всех окон<input type="checkbox" id="tTop"></label>
   <h3>Перезапуск</h3>
-  <button class="calib" data-restart="all">🔄 Перезапустить Зевса</button>
-  <div class="hint" id="restartMsg">Панель и сессия вместе, второй клик подтверждает. Сессия сохраняется: Зевс продолжит тот же диалог и напишет в Telegram, когда вернётся. ⏻ в шапке — выйти совсем.</div>
-  <div class="hint">Голосом: «Зевс, стоп» — замолчать и отменить диктовку; «Зевс, пауза» — ждать «Зевс, продолжай»; «Зевс, выключи микрофон» — закрыть микрофон совсем (включить — ⏸/▶ в шапке). Esc — прервать речь.<br><br>
-    Кнопка 🎙 работает и без слова «Зевс»: удерживай и говори, либо кликни для старта и ещё раз для остановки.<br><br>
+  <button class="calib" data-restart="all">🔄 Перезапустить помощника</button>
+  <div class="hint" id="restartMsg">Панель и сессия вместе, второй клик подтверждает. Сессия сохраняется: помощник продолжит тот же диалог и напишет в Telegram, когда вернётся. ⏻ в шапке — выйти совсем.</div>
+  <div class="hint">Голосом: «{N}, стоп» — замолчать и отменить диктовку; «{N}, пауза» — ждать «{N}, продолжай»; «{N}, выключи микрофон» — закрыть микрофон совсем (включить — ⏸/▶ в шапке). Esc — прервать речь.<br><br>
+    Кнопка 🎙 работает и без слова «{N}»: удерживай и говори, либо кликни для старта и ещё раз для остановки.<br><br>
     Через RDP микрофон называется «Удаленное аудио» — в RDP-клиенте должна быть включена запись звука.</div>
 </div>
 
@@ -190,10 +190,10 @@
 const $ = id => document.getElementById(id);
 const api = () => window.pywebview.api;
 const STATES = {
-  loading: ['загружаю модель…', '#8b95a7'], offline: ['Зевс не в сети', '#ff5d6c'],
-  idle: ['слушаю «Зевс»', '#5ab0ff'], wake: ['слушаю команду…', '#f5c451'],
+  loading: ['загружаю модель…', '#8b95a7'], offline: ['{N} не в сети', '#ff5d6c'],
+  idle: ['слушаю «{N}»', '#5ab0ff'], wake: ['слушаю команду…', '#f5c451'],
   recording: ['говори…', '#ff5d6c'], thinking: ['думаю…', '#a78bfa'], speaking: ['говорю', '#f5c451'],
-  dictating: ['диктовка… «всё» — выполню', '#4ade80'], paused: ['пауза — жду «Зевс, продолжай»', '#8b95a7'],
+  dictating: ['диктовка… «всё» — выполню', '#4ade80'], paused: ['пауза — жду «{N}, продолжай»', '#8b95a7'],
   micoff: ['микрофон выключен', '#ff5d6c'],
 };
 let st = { state: 'loading', mic: 0, pulse: 0, muted: false, wake: true, onTop: true, micOn: true, dictation: true };
@@ -221,7 +221,7 @@ function draw() {
   g.addColorStop(0, color + 'cc'); g.addColorStop(0.45, color + '33'); g.addColorStop(1, color + '00');
   cx.fillStyle = g; cx.beginPath(); cx.arc(X, Y, r * 2.1, 0, Math.PI * 2); cx.fill();
 
-  // кольца-«волны» при речи Зевса
+  // кольца-«волны» при речи помощника
   if (s === 'speaking') {
     for (let i = 0; i < 3; i++) {
       const k = ((phase * 0.6 + i / 3) % 1);
@@ -275,18 +275,20 @@ function add(kind, text, details, meta, why, options) {
   f.scrollTop = f.scrollHeight;
 }
 const SRC = { voice: '🎙 голос', text: '⌨ текст', button: '⚡ кнопка', dictation: '📝 диктовка', dictation_end: '✅ выполнить', choice: '👆 выбор' };
-const WHY = { nowake: 'мимо: не было «Зевс»', paused: 'мимо: пауза' };
+const WHY = { nowake: 'мимо: не было «{N}»', paused: 'мимо: пауза' };
+let NAME = 'VoxCode';  // имя помощника из assistant.json (init)
+const withName = t => t.replaceAll('{N}', NAME);
 
 // ---------- события из Python ----------
-window.zews = {
+window.voxcode = {
   ev(e) {
     switch (e.type) {
       case 'state': setState(e.state); break;
       case 'level': st.mic = e.v; setMeter(e.v); break;
       case 'pulse': st.pulse = e.v; break;
       case 'you': add('you' + (e.source === 'dictation' ? ' dict' : ''), e.text, '', SRC[e.source] || ''); break;
-      case 'heard': if (!/^\W*$/.test(e.text)) add('heard', '«' + e.text + '»', '', '', WHY[e.why]); break;
-      case 'zews': add('zews', e.text, e.details, '⚡ Зевс', '', e.options); break;
+      case 'heard': if (!/^\W*$/.test(e.text)) add('heard', '«' + e.text + '»', '', '', withName(WHY[e.why] || '')); break;
+      case 'bot': add('bot', e.text, e.details, '⚡ ' + NAME, '', e.options); break;
       case 'info': add('info', e.text); break;
       case 'calib':
         $('calibMsg').textContent = e.text;
@@ -312,7 +314,7 @@ function setThr(t) { for (const k of ['', '2']) $('thr' + k).style.left = Math.m
 function setState(s) {
   st.state = s;
   const [label, color] = STATES[s] || [s, '#8b95a7'];
-  $('state').textContent = label; $('state').style.color = color;
+  $('state').textContent = withName(label); $('state').style.color = color;
   $('stage').classList.toggle('speaking', s === 'speaking');
   $('stage').classList.toggle('dictating', s === 'dictating');
   $('bPtt').classList.toggle('rec', s === 'recording');
@@ -430,7 +432,14 @@ $('tTop').onchange = e => { api().set_on_top(e.target.checked); applySettings({ 
 
 window.addEventListener('pywebviewready', async () => {
   const s = await api().init();
-  if (s.name) { $('title').textContent = s.name.toUpperCase(); document.title = s.name; }
+  if (s.name) { NAME = s.name; $('title').textContent = s.name.toUpperCase(); document.title = s.name; }
+  // подставить имя в подсказки панели («{N}, стоп» и т. п.)
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walk.nextNode()) if (walk.currentNode.nodeValue.includes('{N}')) walk.currentNode.nodeValue = withName(walk.currentNode.nodeValue);
+  document.querySelectorAll('[title*="{N}"],[placeholder*="{N}"]').forEach(el => {
+    if (el.title) el.title = withName(el.title);
+    if (el.placeholder) el.placeholder = withName(el.placeholder);
+  });
   applySettings(s); setState(s.state);
 });
 </script>

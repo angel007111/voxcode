@@ -1,6 +1,6 @@
-"""Панель Зевса: плавающее окно поверх остальных + голосовое ядро (listener.Core).
+"""Панель помощника: плавающее окно поверх остальных + голосовое ядро (listener.Core).
 
-  pythonw zews_app.py      — запустить (повторный запуск просто покажет окно)
+  pythonw voxcode_app.py      — запустить (повторный запуск просто покажет окно)
 
 Порт LOCK_PORT — и замок от второго экземпляра, и управление панелью:
 пустое подключение или «show» — показать окно, «quit» — закрыть панель, «ping» — ничего.
@@ -24,8 +24,8 @@ from listener import Core, load_config, save_config, setup_logging  # noqa: E402
 from assistant import NAME  # noqa: E402
 
 LOCK_PORT = 8791
-QUIT_FLAG = HERE.parent / "quit.flag"  # для zews-tray.ps1: «закрыть всё»
-log = logging.getLogger("zews")
+QUIT_FLAG = HERE.parent / "quit.flag"  # для voxcode-tray.ps1: «закрыть всё»
+log = logging.getLogger("voxcode")
 window = None
 core = None
 
@@ -33,7 +33,7 @@ core = None
 def push(ev):
     if window is not None:
         try:
-            window.evaluate_js(f"window.zews && zews.ev({json.dumps(ev, ensure_ascii=False)})")
+            window.evaluate_js(f"window.voxcode && voxcode.ev({json.dumps(ev, ensure_ascii=False)})")
         except Exception:
             pass
 
@@ -102,12 +102,12 @@ class Api:
 
     def open_terminal(self):
         u = ctypes.windll.user32
-        h = u.FindWindowW("CASCADIA_HOSTING_WINDOW_CLASS", "Zews Core")
+        h = u.FindWindowW("CASCADIA_HOSTING_WINDOW_CLASS", "VoxCode Core")
         if h:
             u.ShowWindow(h, 9)
             u.SetForegroundWindow(h)
         else:
-            core.start_zews()
+            core.start_session()
 
     def restart(self, what="all"):
         """Перезапуск через restart.ps1 отвязанным процессом: «all», «core» (сессия) или «panel».
@@ -135,13 +135,13 @@ class Api:
         (сам терминал не трогаем: трей увидел бы закрытое окно и поднял сессию заново)."""
         log.info("панель: закрыть всё")
         import subprocess
-        # сначала сжать контекст сессии (/compact), если он заполнен на 60%+ — до 3 мин, если Зевс занят
+        # сначала сжать контекст сессии (/compact), если он заполнен на 60%+ — до 3 мин, если помощник занят
         compact = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(HERE.parent / "compact.ps1")]
         if subprocess.run(compact + ["-Check"], creationflags=subprocess.CREATE_NO_WINDOW).returncode == 10:
             push({"type": "info", "text": "Сжимаю контекст сессии перед выходом…"})
             subprocess.run(compact, creationflags=subprocess.CREATE_NO_WINDOW)
         u = ctypes.windll.user32
-        tray = ctypes.windll.kernel32.OpenMutexW(0x00100000, False, "Global\\ZewsTray")  # SYNCHRONIZE
+        tray = ctypes.windll.kernel32.OpenMutexW(0x00100000, False, "Global\\VoxCodeTray")  # SYNCHRONIZE
         if tray:
             ctypes.windll.kernel32.CloseHandle(tray)
             QUIT_FLAG.touch()
@@ -152,7 +152,7 @@ class Api:
                 time.sleep(0.1)
             if not QUIT_FLAG.exists():
                 time.sleep(10)
-        h = u.FindWindowW("CASCADIA_HOSTING_WINDOW_CLASS", "Zews Core")
+        h = u.FindWindowW("CASCADIA_HOSTING_WINDOW_CLASS", "VoxCode Core")
         if h:
             u.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE
         os._exit(0)
@@ -183,7 +183,7 @@ def lock_server(sock):
 
 def hide_from_taskbar():
     """Убрать панель с панели задач: окно процесса → WS_EX_TOOLWINDOW вместо WS_EX_APPWINDOW.
-    Вернуть окно — значок Зевса в трее."""
+    Вернуть окно — значок помощника в трее."""
     u = ctypes.windll.user32
     GWL_EXSTYLE, WS_EX_TOOLWINDOW, WS_EX_APPWINDOW = -20, 0x80, 0x40000
     pid = os.getpid()

@@ -1,7 +1,7 @@
-"""Узнавание голоса владельца (SpeechBrain ECAPA): нужно, чтобы перебивать Зевса без слова «Зевс».
+"""Узнавание голоса владельца (SpeechBrain ECAPA): нужно, чтобы перебивать помощника без слова «имя».
 
 Образцы копятся сами: каждая фраза владельца, которую слушатель принял как команду (не во время
-речи Зевса), добавляет «отпечаток» голоса в owner_voice.npy (последние MAX_SAMPLES).
+речи помощника), добавляет «отпечаток» голоса в owner_voice.npy (последние MAX_SAMPLES).
 Во время озвучки слушатель сравнивает звук с микрофона со средним отпечатком: похоже — это владелец.
 Начать заново — удалить owner_voice.npy.
 """
@@ -19,7 +19,7 @@ MAX_SAMPLES = 30
 MIN_SECONDS = 1.0     # короче — отпечаток ненадёжный, в образцы не берём
 SR = 16000
 
-log = logging.getLogger("zews")
+log = logging.getLogger("voxcode")
 logging.getLogger("speechbrain").setLevel(logging.WARNING)  # иначе засоряет listener.log при каждом старте
 
 
@@ -41,7 +41,7 @@ class SpeakerID:
                 source="speechbrain/spkrec-ecapa-voxceleb", savedir=str(MODEL_DIR), run_opts={"device": "cpu"})
             log.info("голос владельца: модель готова, образцов %d", len(self.samples))
         except Exception as e:
-            log.error("голос владельца: модель не загрузилась (%s) — перебивание только по «Зевс»", e)
+            log.error("голос владельца: модель не загрузилась (%s) — перебивание только по «имя»", e)
 
     def _update_mean(self):
         if len(self.samples) >= MIN_SAMPLES:
@@ -68,7 +68,7 @@ class SpeakerID:
         return float(self.embed(audio) @ self.mean)
 
     def compare(self, audio, other):
-        """(похожесть на владельца, похожесть на other) по одному отпечатку; other — отпечаток голоса Зевса."""
+        """(похожесть на владельца, похожесть на other) по одному отпечатку; other — отпечаток голоса помощника."""
         if not self.ready:
             return None, None
         e = self.embed(audio)

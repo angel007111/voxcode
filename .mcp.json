@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "zews-voice": {
+    "voxcode": {
       "command": "bun",
       "args": ["voice/channel.ts"]
     }

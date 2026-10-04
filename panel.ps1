@@ -1,4 +1,4 @@
-﻿# Управление панелью Зевса (voice\zews_app.py). Подключается через dot-source из restart.ps1 и zews-tray.ps1.
+﻿# Управление панелью помощника (voice\voxcode_app.py). Подключается через dot-source из restart.ps1 и voxcode-tray.ps1.
 # Панель держит порт 8791: «quit» по нему закрывает её, даже если она запущена от администратора
 # (Stop-Process и чтение CommandLine такого процесса из обычных прав не работают).
 
@@ -25,7 +25,7 @@ function Stop-Panel {
   $ids = @()
   if (Test-Path $PanelPid) { $ids += [int](Get-Content $PanelPid -TotalCount 1) }
   $ids += Get-CimInstance Win32_Process -Filter "Name='pythonw.exe'" |
-    Where-Object { $_.CommandLine -match 'listener\.py|zews_app\.py' } | ForEach-Object { $_.ProcessId }
+    Where-Object { $_.CommandLine -match 'listener\.py|voxcode_app\.py' } | ForEach-Object { $_.ProcessId }
   foreach ($id in ($ids | Select-Object -Unique)) {
     try { Stop-Process -Id $id -Force -ErrorAction Stop } catch {}
   }
@@ -36,5 +36,5 @@ function Stop-Panel {
 function Start-Panel {
   $py = (Get-Command pythonw.exe -ErrorAction SilentlyContinue).Source
   if (-not $py) { $py = Join-Path (Split-Path (Get-Command python.exe).Source) 'pythonw.exe' }
-  Start-Process $py -ArgumentList "`"$PanelRoot\voice\zews_app.py`"" -WorkingDirectory "$PanelRoot\voice"
+  Start-Process $py -ArgumentList "`"$PanelRoot\voice\voxcode_app.py`"" -WorkingDirectory "$PanelRoot\voice"
 }

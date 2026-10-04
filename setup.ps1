@@ -66,5 +66,5 @@ if ((Ask "`nПоставить зависимости Python и Bun сейчас
 Write-Host "`nClaude работает по подписке (Pro/Max), API-ключ не нужен." -ForegroundColor Yellow
 Write-Host "Если ещё не входил: открой терминал в $Root, запусти claude и войди (/login)."
 
-Write-Host "`nГотово. Запуск: двойной клик по zews.vbs." -ForegroundColor Green
+Write-Host "`nГотово. Запуск: двойной клик по voxcode.vbs." -ForegroundColor Green
 Write-Host "Голос владельца $name запомнит сам после 3 команд.`n"

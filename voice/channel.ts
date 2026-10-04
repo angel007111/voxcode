@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-// Канал zews-voice: голосовые команды со слушателя (listener.py) -> сессия Зевса,
-// ответы Зевса (инструмент say) -> слушатель, который их озвучивает.
+// Канал voxcode: голосовые команды со слушателя (listener.py) -> сессия помощника,
+// ответы помощника (инструмент say) -> слушатель, который их озвучивает.
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js'
@@ -22,13 +22,13 @@ function broadcast(event: object) {
 }
 
 const mcp = new Server(
-  { name: 'zews-voice', version: '0.1.0' },
+  { name: 'voxcode', version: '0.1.0' },
   {
     capabilities: { experimental: { 'claude/channel': {} }, tools: {} },
     instructions:
-      'Команды владельца с ПК приходят как <channel source="zews-voice" chat_id="..." via="...">текст</channel>. ' +
+      'Команды владельца с ПК приходят как <channel source="voxcode" chat_id="..." via="...">текст</channel>. ' +
       'via="voice" — распознанная речь с микрофона (возможны ошибки распознавания, при неоднозначности переспроси); ' +
-      'via="text" — набрано в панели Зевса; via="button" — кнопка быстрого действия (/brief, /tasks, /mail, /cal, /projects — как в Telegram). ' +
+      'via="text" — набрано в панели помощника; via="button" — кнопка быстрого действия (/brief, /tasks, /mail, /cal, /projects — как в Telegram). ' +
       'Ответ показывается текстом в панели и озвучивается. Для сводок и списков (особенно via="button") ' +
       'кратко скажи суть в text, а сам список/подробности положи в details — они видны в панели, но не звучат. ' +
       'Отвечай ТОЛЬКО через инструмент say (он озвучит ответ в колонках владельца): 1–3 коротких разговорных предложения, ' +
@@ -54,7 +54,7 @@ const mcp = new Server(
 mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [{
     name: 'say',
-    description: 'Озвучить ответ владельцу через колонки ПК (голосовой канал zews-voice).',
+    description: 'Озвучить ответ владельцу через колонки ПК (голосовой канал voxcode).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -90,7 +90,7 @@ Bun.serve({
   hostname: '127.0.0.1',
   idleTimeout: 0,
   async fetch(req) {
-    if (req.headers.get('X-Zews-Token') !== TOKEN) return new Response('forbidden', { status: 403 })
+    if (req.headers.get('X-VoxCode-Token') !== TOKEN) return new Response('forbidden', { status: 403 })
     const url = new URL(req.url)
 
     if (req.method === 'GET' && url.pathname === '/events') {
@@ -113,7 +113,7 @@ Bun.serve({
       // voice — сказано в микрофон, text — набрано в панели, button — кнопка быстрого действия,
       // dictation — кусок диктовки, dictation_end — конец диктовки, choice — кнопка варианта из say.options
       const via = { voice: 'voice', text: 'text', button: 'button', dictation: 'dictation', dictation_end: 'dictation_end', choice: 'choice' }[
-        req.headers.get('X-Zews-Source') ?? ''] ?? 'voice'
+        req.headers.get('X-VoxCode-Source') ?? ''] ?? 'voice'
       await mcp.notification({
         method: 'notifications/claude/channel',
         params: { content: text, meta: { chat_id: String(nextId++), via } },

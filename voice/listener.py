@@ -1,27 +1,27 @@
-"""Ядро голоса Зевса: микрофон, слово «Зевс», связь с каналом zews-voice, озвучка.
+"""Ядро голоса помощника: микрофон, слово «имя», связь с каналом voxcode, озвучка.
 
-Используется панелью (zews_app.py) и фоновым режимом:
+Используется панелью (voxcode_app.py) и фоновым режимом:
   pythonw listener.py                 — без окна (лог в listener.log)
-  python listener.py --test <audio>   — проверить распознавание и «Зевс» на файле
+  python listener.py --test <audio>   — проверить распознавание и «имя» на файле
 
 Режим диктовки (по умолчанию включён):
-  «Зевс» -> сигнал, дальше всё сказанное копится, но не выполняется.
-  Пауза 2.5 с -> накопленное уходит Зевсу как диктовка: законченную просьбу он выполняет сразу,
+  «имя» -> сигнал, дальше всё сказанное копится, но не выполняется.
+  Пауза 2.5 с -> накопленное уходит помощнику как диктовка: законченную просьбу он выполняет сразу,
   оборванную фразу — только коротко подтверждает («Понял»).
-  «всё / выполняй / поехали / нет» -> конец диктовки, Зевс выполняет всё ещё не сделанное.
-  40 с тишины -> диктовка закрывается без выполнения (текст у Зевса уже есть).
-Без режима диктовки: «Зевс, <команда>» сразу уходит Зевсу, после ответа 10 с можно без «Зевс».
-В конце ответа Зевса двойной восходящий сигнал — микрофон снова слушает (в диктовке или эти 10 с).
-Если Зевс выключен — запускает его (zews-tray.ps1) и передаёт команду.
+  «всё / выполняй / поехали / нет» -> конец диктовки, помощник выполняет всё ещё не сделанное.
+  40 с тишины -> диктовка закрывается без выполнения (текст у помощника уже есть).
+Без режима диктовки: «<имя>, <команда>» сразу уходит помощнику, после ответа 10 с можно без «имя».
+В конце ответа помощника двойной восходящий сигнал — микрофон снова слушает (в диктовке или эти 10 с).
+Если помощник выключен — запускает его (voxcode-tray.ps1) и передаёт команду.
 
-Перебивание: пока Зевс говорит, микрофон слушает только «Зевс, …» (эхо колонок без этого слова
+Перебивание: пока помощник говорит, микрофон слушает только «<имя>, …» (эхо колонок без этого слова
 игнорируется) — речь обрывается, команда уходит как обычно. Выключается в config.json: "barge_in": false.
 
-Команды, которые выполняются сразу, без сессии Зевса:
-  «Зевс, стоп / хватит / замолчи»          — замолчать, отменить диктовку
-  «Зевс, пауза / жди / не слушай»          — пауза: реагирую только на «Зевс, продолжай»
-  «Зевс, продолжай / слушай / старт»       — выйти из паузы
-  «Зевс, выключи микрофон / стоп запись»   — закрыть микрофон совсем (включить — ▶ в панели)
+Команды, которые выполняются сразу, без сессии помощника:
+  «<имя>, стоп / хватит / замолчи»          — замолчать, отменить диктовку
+  «<имя>, пауза / жди / не слушай»          — пауза: реагирую только на «<имя>, продолжай»
+  «<имя>, продолжай / слушай / старт»       — выйти из паузы
+  «<имя>, выключи микрофон / стоп запись»   — закрыть микрофон совсем (включить — ▶ в панели)
 """
 import json
 import logging
@@ -44,11 +44,11 @@ sys.path.insert(0, str(HERE))
 from voice import _add_cuda_dlls, synth, WHISPER_MODEL  # noqa: E402  (WHISPER_MODEL — запасная для CPU)
 from audio_prep import prepare  # noqa: E402
 from speaker_id import SpeakerID  # noqa: E402
-from assistant import WAKE_CORE  # noqa: E402  (имя и слово-активатор — assistant.json, см. setup.ps1)
+from assistant import NAME, WAKE_CORE  # noqa: E402  (имя и слово-активатор — assistant.json, см. setup.ps1)
 
 BASE = "http://127.0.0.1:8790"
 CONFIG = HERE / "config.json"
-MIC_OFF = HERE / "mic.off"          # общий с треем флаг «не слушать слово Зевс»
+MIC_OFF = HERE / "mic.off"          # общий с треем флаг «не слушать слово помощник»
 SR = 16000
 BLOCK = int(SR * 0.03)              # 30 мс
 PRE_ROLL = 10                       # ~0.3 с до начала речи
@@ -56,14 +56,14 @@ END_SILENCE = 1.0
 MAX_UTTERANCE = 20.0
 MIN_UTTERANCE = 0.4
 FOLLOW_UP = 10.0
-WAKE_WAIT = 10.0                    # после одиночного «Зевс» столько ждём команду (без диктовки)
-DICT_PAUSE = 2.5                    # пауза в диктовке, после которой фраза уходит Зевсу
+WAKE_WAIT = 10.0                    # после одиночного «имя» столько ждём команду (без диктовки)
+DICT_PAUSE = 2.5                    # пауза в диктовке, после которой фраза уходит помощнику
 DICT_TIMEOUT = 40.0                 # тишина, после которой диктовка закрывается без выполнения
 THINK_TIMEOUT = 60.0                # сколько максимум показывать «думаю», если ответа нет
 ECHO_TAIL = 1.5                     # с после озвучки микрофон ещё глух: хвост звука (RDP отстаёт)
 GAIN = 1.0                          # программное усиление микрофона (настраивается в панели)
 THRESHOLD = 0.01                    # нижний порог громкости начала речи (после усиления)
-LISTEN_MODEL = os.environ.get("ZEWS_LISTEN_MODEL", "large-v3-turbo")
+LISTEN_MODEL = os.environ.get("VOXCODE_LISTEN_MODEL", "large-v3-turbo")
 WAKE = re.compile(
     r"^\W*(?:(?:эй|слушай|и|а|ну|о|ой|так)\W+){0,2}(" + WAKE_CORE + r")\b\W*", re.I)
 # Whisper в тишине и шуме «слышит» титры с YouTube
@@ -81,10 +81,10 @@ CMD_DONE = re.compile(
     r"(это )?все( (выполняй|делай|поехали|приступай))?|выполняй|приступай|поехали|делай|давай делай"
     r"|нет|нет все|нет спасибо|больше ничего|нет больше ничего|ничего")
 WAKE_ANY = re.compile(r"\b(" + WAKE_CORE + r")\b", re.I)  # имя помощника в любом месте фразы
-VOICE_MARGIN = 0.1                  # насколько звук должен быть ближе к владельцу, чем к голосу Зевса (config: voice_margin)
+VOICE_MARGIN = 0.1                  # насколько звук должен быть ближе к владельцу, чем к голосу помощника (config: voice_margin)
 VOICE_SURE = 0.2                    # разница, при которой хватает одной проверки
-VOICE_THRESHOLD = 0.15              # похожесть на голос владельца, с которой Зевс замолкает (config: voice_threshold)
-OWNER_WAIT = 8.0                    # с: перебил, но так ничего и не сказал — Зевс договаривает
+VOICE_THRESHOLD = 0.15              # похожесть на голос владельца, с которой помощник замолкает (config: voice_threshold)
+OWNER_WAIT = 8.0                    # с: перебил, но так ничего и не сказал — помощник договаривает
 # Реплики-заполнители по смыслу фразы владельца (первое совпадение сверху), иначе — общие
 FILLER_RULES = [
     (re.compile(r"браузер|сайт|страниц|хром", re.I), ["Давай посмотрим в браузере.", "Открываю браузер."]),
@@ -96,21 +96,21 @@ FILLER_RULES = [
     (re.compile(r"\?|\b(как|почему|зачем|что|когда|сколько|может)\b", re.I), ["Хм, сейчас подумаю.", "Так, секунду.", "Хороший вопрос."]),
 ]
 FILLERS_ANY = ["Угу.", "Так…", "Секунду.", "Ага."]
-# Ответ на одно «Зевс»: после долгого перерыва — приветствие по времени суток, иначе коротко
+# Ответ на одно «имя»: после долгого перерыва — приветствие по времени суток, иначе коротко
 ACK_GREET = {"morning": ["Доброе утро! Как спалось?", "Доброе утро, слушаю."],
              "day": ["Привет! Слушаю.", "Привет, как дела?"],
              "evening": ["Добрый вечер! Слушаю.", "Привет! Как прошёл день?"],
              "night": ["Не спится? Слушаю.", "Тут я. Что случилось?"]}
 ACK_SHORT = ["Да?", "Слушаю.", "Тут.", "Да, слушаю.", "М?"]
-GREET_GAP = 3 * 3600                # с без разговора — дальше «Зевс» встречаю приветствием
+GREET_GAP = 3 * 3600                # с без разговора — дальше «имя» встречаю приветствием
 FILLERS = sorted({t for _, ts in FILLER_RULES for t in ts} | set(FILLERS_ANY) | set(ACK_SHORT)
                  | {t for ts in ACK_GREET.values() for t in ts})
-FILLER_DELAY = 1.2                  # с: ответа Зевса ещё нет — короткая реплика, чтобы не молчать
+FILLER_DELAY = 1.2                  # с: ответа помощника ещё нет — короткая реплика, чтобы не молчать
 FILLER_SOURCES = {"voice", "dictation", "dictation_end", "choice"}  # только на сказанное голосом
-BARGE_MAX = 3.0                     # с: куски речи во время озвучки — короткие, чтобы «Зевс» был в начале
+BARGE_MAX = 3.0                     # с: куски речи во время озвучки — короткие, чтобы «имя» был в начале
 DONE_TAIL = re.compile(r"[\s,.!?…-]*\b(выполняй|приступай|поехали)\W*$", re.I)
 
-log = logging.getLogger("zews")
+log = logging.getLogger("voxcode")
 
 _TR = str.maketrans({"а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh", "з": "z",
                      "и": "i", "й": "i", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
@@ -188,22 +188,22 @@ class Core:
         self.level = 0.0
         self.restart_stream = False
         self.online = False
-        self.standby = False                # «Зевс, пауза»: жду только «Зевс, продолжай»
+        self.standby = False                # «<имя>, пауза»: жду только «<имя>, продолжай»
         self.calib = None                   # список RMS во время калибровки
         self.in_speech = False
         self.dictating = False
         self.dict_buf = []
         self.last_heard = 0.0
         self.barge_scores = []
-        self.say_busy = False               # идёт ответ Зевса (say) — реплика-заполнитель не нужна
-        self.tts_emb = None                 # отпечаток голоса Зевса (TTS) — чтобы отличать эхо от владельца
-        self.last_talk = self._read_last_talk()  # когда владелец последний раз что-то говорил Зевсу
+        self.say_busy = False               # идёт ответ помощника (say) — реплика-заполнитель не нужна
+        self.tts_emb = None                 # отпечаток голоса помощника (TTS) — чтобы отличать эхо от владельца
+        self.last_talk = self._read_last_talk()  # когда владелец последний раз что-то говорил помощнику
         self.last_filler = None
         self.owner_pause = threading.Event()   # владелец заговорил во время речи — пауза
         self.pause_done = threading.Event()    # мик разобрал его фразу: решение в pause_resume
         self.pause_resume = True
         self.spk = SpeakerID(on_ready=lambda: self.emit(
-            type="info", text="Запомнил твой голос — теперь можно перебивать меня без «Зевс»"))
+            type="info", text=f"Запомнил твой голос — теперь можно перебивать меня без «{NAME}»"))
 
     # ---------- события ----------
     def emit(self, **ev):
@@ -328,7 +328,7 @@ class Core:
         audio = prepare(audio, do_denoise=self.cfg.get("denoise", True))
         segments, _ = self.model.transcribe(
             audio, language="ru", beam_size=5, vad_filter=True,
-            hotwords="Зевс", condition_on_previous_text=False,
+            hotwords=NAME, condition_on_previous_text=False,
         )
         text = " ".join(s.text.strip() for s in segments).strip()
         if HALLUCINATION.search(text):
@@ -379,7 +379,7 @@ class Core:
 
     def say(self, text, ready=False):
         """Озвучить text; во время речи шлёт уровни для «пульса».
-        ready — ответ Зевса: в конце сигнал «слушаю», если после него микрофон ждёт без «Зевс»."""
+        ready — ответ помощника: в конце сигнал «слушаю», если после него микрофон ждёт без «имя»."""
         from faster_whisper import decode_audio
 
         if self.muted:
@@ -448,43 +448,43 @@ class Core:
             self.emit(type="pulse", v=0)
             if self.barge_scores:
                 sc = sorted(self.barge_scores)
-                log.info("голос при озвучке: проверок %d, (владелец − Зевс) медиана %.2f, топ %s",
+                log.info("голос при озвучке: проверок %d, (владелец − помощник) медиана %.2f, топ %s",
                          len(sc), sc[len(sc) // 2], " ".join(f"{x:.2f}" for x in sc[-5:]))
             # после сигнала «слушаю» речь уже отзвучала — хвост короче, чтобы не съесть начало фразы
             tail = 0 if interrupted else 0.7 if ready else float(self.cfg.get("echo_tail", ECHO_TAIL))
             self.deaf_until = time.time() + tail
-            self.last_heard = self.deaf_until  # пауза диктовки считается от конца речи Зевса
+            self.last_heard = self.deaf_until  # пауза диктовки считается от конца речи помощника
             self.speaking.clear()
             self.say_busy = False
             self.set_state(self.idle_state())
 
     def barge(self, text):
-        """Речь во время озвучки: «Зевс, …» обрывает Зевса и уходит как обычная команда, остальное — эхо."""
+        """Речь во время озвучки: «<имя>, …» обрывает помощника и уходит как обычная команда, остальное — эхо."""
         m = WAKE_ANY.search(text or "")
         if not m:
-            log.info("при озвучке (не «Зевс»): %s", text)
+            log.info("при озвучке (не «имя»): %s", text)
             return
         if WAKE_ANY.search(getattr(self, "speaking_text", "")):
-            return  # Зевс сам произносит своё имя — это эхо, а не владелец
+            return  # помощник сам произносит своё имя — это эхо, а не владелец
         log.info("перебили: %s", text)
         self.stop_speaking()
         self.handle(text[m.start():])
 
     def update_tts_print(self, mp3):
-        """Отпечаток голоса Зевса — по только что озвученному (первые 8 с), сглаженно."""
+        """Отпечаток голоса помощника — по только что озвученному (первые 8 с), сглаженно."""
         if self.spk.model is None:
             return
         try:
             from faster_whisper import decode_audio
             e = self.spk.embed(decode_audio(str(mp3), sampling_rate=16000)[:16000 * 8])
         except Exception as ex:
-            log.error("отпечаток голоса Зевса: %s", ex)
+            log.error("отпечаток голоса помощника: %s", ex)
             return
         m = e if self.tts_emb is None else 0.7 * self.tts_emb + 0.3 * e
         self.tts_emb = m / (np.linalg.norm(m) or 1.0)
 
     def is_echo(self, text):
-        """Фраза — это мои же слова из колонок (большинство слов есть в том, что Зевс сейчас говорит)."""
+        """Фраза — это мои же слова из колонок (большинство слов есть в том, что помощник сейчас говорит)."""
         # латиница и кириллица сравниваются в одной записи: «VoxCode» в речи ≈ «вокс-код» в распознанном
         words = re.findall(r"\w+", translit(text.lower()))
         said = set(re.findall(r"\w+", translit(getattr(self, "speaking_text", "").lower())))
@@ -513,7 +513,7 @@ class Core:
         return HERE / "out" / "fillers" / (hashlib.md5(text.encode()).hexdigest()[:10] + ".mp3")
 
     def filler_later(self, sent_at, said):
-        """Через FILLER_DELAY, если Зевс ещё молчит, — короткое «угу / секунду»."""
+        """Через FILLER_DELAY, если помощник ещё молчит, — короткое «угу / секунду»."""
         time.sleep(FILLER_DELAY)
         if (self.muted or self.say_busy or self.speaking.is_set() or self.state != "thinking"
                 or not self.cfg.get("fillers", True) or self.thinking_until < sent_at):
@@ -544,7 +544,7 @@ class Core:
         try:
             self.play(audio)
         finally:
-            if not self.say_busy:  # ответ Зевса уже начался — его флаг не трогаем
+            if not self.say_busy:  # ответ помощника уже начался — его флаг не трогаем
                 self.deaf_until = time.time() + 0.5
                 self.speaking.clear()
         return True
@@ -565,7 +565,7 @@ class Core:
             pass
 
     def ack(self):
-        """Ответ на одно «Зевс»: приветствие по времени суток после долгого перерыва, иначе «Да?»."""
+        """Ответ на одно «имя»: приветствие по времени суток после долгого перерыва, иначе «Да?»."""
         import random
         now = time.time()
         if now - self.last_talk > GREET_GAP:
@@ -576,7 +576,7 @@ class Core:
             text = random.choice([t for t in ACK_SHORT if t != self.last_filler] or ACK_SHORT)
         self.last_filler = text
         self.touch_talk()
-        log.info("на «Зевс»: %s", text)
+        log.info("на «имя»: %s", text)
         threading.Thread(target=lambda: self.play_phrase(text) or self.beep(), daemon=True).start()
 
     def say_async(self, text):
@@ -594,21 +594,21 @@ class Core:
     # ---------- канал ----------
     def channel_up(self):
         try:
-            return requests.get(BASE + "/ping", headers={"X-Zews-Token": token()}, timeout=2).ok
+            return requests.get(BASE + "/ping", headers={"X-VoxCode-Token": token()}, timeout=2).ok
         except requests.RequestException:
             return False
 
-    def start_zews(self):
-        log.info("Зевс не запущен — запускаю")
-        self.emit(type="info", text="Зевс выключен — запускаю…")
+    def start_session(self):
+        log.info("сессия не запущена — запускаю")
+        self.emit(type="info", text=f"{NAME} выключен — запускаю…")
         subprocess.Popen(
             ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass",
-             "-File", str(HERE.parent / "zews-tray.ps1"), "-Minimized"],
+             "-File", str(HERE.parent / "voxcode-tray.ps1"), "-Minimized"],
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
 
     def send(self, text, source="voice", show=True):
-        """Передать команду Зевсу (в отдельном потоке)."""
+        """Передать команду помощнику (в отдельном потоке)."""
         self.touch_talk()
         if show:
             self.emit(type="you", text=text, source=source)
@@ -616,20 +616,20 @@ class Core:
 
     def _send(self, text, source):
         if not self.channel_up():
-            self.start_zews()
+            self.start_session()
             self.say_async("Запускаюсь, секунду.")
             for _ in range(90):
                 time.sleep(1)
                 if self.channel_up():
                     break
             else:
-                self.emit(type="info", text="Не удалось запустить Зевса — загляни в его окно")
-                self.say("Не получилось запуститься. Загляни в окно Зевса.")
+                self.emit(type="info", text="Не удалось запустить помощника — загляни в его окно")
+                self.say("Не получилось запуститься. Загляни в окно помощника.")
                 return
         try:
             r = requests.post(BASE + "/say", data=text.encode("utf-8"),
-                              headers={"X-Zews-Token": token(), "X-Zews-Source": source}, timeout=10)
-            log.info("-> Зевсу (%s): %s [%s]", source, text, r.status_code)
+                              headers={"X-VoxCode-Token": token(), "X-VoxCode-Source": source}, timeout=10)
+            log.info("-> %s (%s): %s [%s]", NAME, source, text, r.status_code)
             self.thinking_until = time.time() + THINK_TIMEOUT
             self.set_state("thinking")
             if source in FILLER_SOURCES:
@@ -640,21 +640,21 @@ class Core:
     def events_loop(self):
         while True:
             try:
-                with requests.get(BASE + "/events", headers={"X-Zews-Token": token()},
+                with requests.get(BASE + "/events", headers={"X-VoxCode-Token": token()},
                                   stream=True, timeout=(3, None)) as r:
                     if not r.ok:
                         raise requests.RequestException(r.status_code)
                     r.encoding = "utf-8"  # text/event-stream без charset -> requests берёт Latin-1
-                    log.info("подключился к каналу zews-voice")
+                    log.info("подключился к каналу voxcode")
                     self.online = True
                     self.set_state(self.idle_state())
                     for line in r.iter_lines(decode_unicode=True):
                         if line and line.startswith("data: "):
                             ev = json.loads(line[6:])
                             if ev.get("type") == "say":
-                                log.info("<- Зевс: %s", ev["text"])
+                                log.info("<- %s: %s", NAME, ev["text"])
                                 self.thinking_until = 0
-                                self.emit(type="zews", text=ev["text"], details=ev.get("details") or "",
+                                self.emit(type="bot", text=ev["text"], details=ev.get("details") or "",
                                           options=ev.get("options") or [])
                                 self.say(ev["text"], ready=True)
                                 if not self.dictating:
@@ -711,7 +711,7 @@ class Core:
         time.sleep(3)
         noise = self.calib[5:]
         self.calib = []
-        self.emit(type="calib", step="speech", text="Теперь скажи обычным голосом: «Зевс, какие у меня задачи на сегодня»")
+        self.emit(type="calib", step="speech", text=f"Теперь скажи обычным голосом: «{NAME}, какие у меня задачи на сегодня»")
         time.sleep(4.5)
         speech, self.calib = self.calib, None
         n = float(np.median(noise)) if noise else 0.001
@@ -729,7 +729,7 @@ class Core:
 
     # ---------- обработка фраз ----------
     def local_command(self, command):
-        """Команды, которые выполняем сами, без сессии Зевса. True — команда съедена."""
+        """Команды, которые выполняем сами, без сессии помощника. True — команда съедена."""
         c = norm(command)
         if not c:
             return False
@@ -755,7 +755,7 @@ class Core:
             self.cancel_dictation()
             self.standby = True
             self.follow_until = self.awaiting_until = 0
-            self.say_async("Пауза. Скажи «Зевс, продолжай», когда понадоблюсь.")
+            self.say_async(f"Пауза. Скажи «{NAME}, продолжай», когда понадоблюсь.")
             return True
         if self.standby and CMD_RESUME.fullmatch(c):
             log.info("команда: продолжить")
@@ -765,7 +765,7 @@ class Core:
         return False
 
     def handle(self, text):
-        """Разобрать фразу с микрофона. False — фраза ушла мимо (без «Зевс» или на паузе)."""
+        """Разобрать фразу с микрофона. False — фраза ушла мимо (без «имя» или на паузе)."""
         now = time.time()
         if not text:
             return False
@@ -774,7 +774,7 @@ class Core:
         if not (m or self.dictating or now < self.awaiting_until or now < self.follow_until):
             log.debug("мимо: %s", text)
             return False
-        if m and not command:  # просто «Зевс»
+        if m and not command:  # просто «имя»
             if self.dictation_mode and not self.standby:
                 self.dictate("")
             elif not self.dictating:
@@ -816,14 +816,14 @@ class Core:
             if text or done:
                 self.beep()
             else:
-                self.ack()  # просто «Зевс» — ответить голосом, а не только писком
+                self.ack()  # просто «имя» — ответить голосом, а не только писком
         if done or tail:
             self.finish_dictation(text if done else "")
         else:
             self.set_state(self.idle_state())
 
     def finish_dictation(self, last_phrase=""):
-        """Конец диктовки: Зевс получает остаток и сигнал «выполняй»."""
+        """Конец диктовки: помощник получает остаток и сигнал «выполняй»."""
         with self.lock:
             buf, self.dict_buf = self.dict_buf, []
             self.dictating = False
@@ -841,7 +841,7 @@ class Core:
         return was
 
     def dictation_loop(self):
-        """Пауза 5 с — отдаём накопленное Зевсу на уточнение; долгая тишина — закрываем диктовку."""
+        """Пауза 5 с — отдаём накопленное помощнику на уточнение; долгая тишина — закрываем диктовку."""
         while True:
             time.sleep(0.25)
             if not self.dictating or self.in_speech or self.speaking.is_set() or self.ptt:
@@ -870,12 +870,12 @@ class Core:
         q = queue.Queue()
 
         def cb(indata, frames, t, status):
-            # Пока Зевс говорит (и чуть после), звук выбрасываем прямо при захвате,
+            # Пока помощник говорит (и чуть после), звук выбрасываем прямо при захвате,
             # иначе блоки копятся в очереди и разбираются уже после речи как живые.
             raw = indata[:, 0]
             if not self.ptt and self.speaking.is_set() and self.cfg.get("barge_in", True):
                 self.level = float(np.sqrt((np.clip(raw * self.gain, -1.0, 1.0) ** 2).mean()))
-                q.put(("barge", raw.copy()))  # перебивание: слушаем только «Зевс, …»
+                q.put(("barge", raw.copy()))  # перебивание: слушаем только «<имя>, …»
                 return
             if not self.ptt and (self.speaking.is_set() or time.time() < self.deaf_until):
                 self.level = 0.0
@@ -892,7 +892,7 @@ class Core:
         noise = 0.005
         pre, buf, in_speech, silence = [], [], False, 0.0
         barge = False  # сейчас разбираем речь во время озвучки
-        owner = False  # владелец перебил голосом: дослушиваем его фразу, Зевс на паузе
+        owner = False  # владелец перебил голосом: дослушиваем его фразу, помощник на паузе
         roll, hop = [], 0  # последние ~1.5 с во время озвучки — для узнавания голоса
         prev_ok = False  # прошлая проверка тоже была «похоже на владельца»
         with sd.InputStream(samplerate=SR, channels=1, dtype="float32", blocksize=BLOCK,
@@ -906,14 +906,14 @@ class Core:
                     block = q.get(timeout=0.5)
                 except queue.Empty:
                     continue
-                if block is None:  # захват заглушён (хвост эха после речи Зевса)
+                if block is None:  # захват заглушён (хвост эха после речи помощника)
                     pre, buf, in_speech = [], [], False
                     continue
                 is_barge = isinstance(block, tuple)
                 if is_barge:
                     block = block[1]
                     if owner:
-                        is_barge = False  # Зевс ещё не успел замолчать — это уже фраза владельца
+                        is_barge = False  # помощник ещё не успел замолчать — это уже фраза владельца
                 if is_barge != barge:  # озвучка началась/кончилась — начинаем кусок заново
                     pre, buf, in_speech, barge, roll, hop, prev_ok = [], [], False, is_barge, [], 0, False
                 if self.ptt:
@@ -932,7 +932,7 @@ class Core:
                         hop = 0
                         win = np.concatenate(roll)
                         if float(np.sqrt((win ** 2).mean())) * self.gain > thr:
-                            # эхо колонок похоже на голос Зевса сильнее, чем на владельца; владелец — наоборот
+                            # эхо колонок похоже на голос помощника сильнее, чем на владельца; владелец — наоборот
                             sc, zs = self.spk.compare(win, self.tts_emb)
                             if sc is not None:
                                 self.barge_scores.append(sc - zs)
@@ -942,15 +942,15 @@ class Core:
                             # одиночные всплески эха в начале фразы так не срабатывают
                             sure, prev_ok = ok and (sc - zs >= VOICE_SURE or prev_ok), ok
                             if sure:
-                                log.info("перебил голосом (владелец %.2f, Зевс %.2f) — пауза", sc, zs)
+                                log.info("перебил голосом (владелец %.2f, помощник %.2f) — пауза", sc, zs)
                                 owner, barge = True, False
-                                self.follow_until = time.time() + FOLLOW_UP  # без «Зевс»
+                                self.follow_until = time.time() + FOLLOW_UP  # без «имя»
                                 self.pause_done.clear()
                                 self.owner_pause.set()
                                 pre, buf, in_speech, silence = [], roll[-33:], True, 0.0  # последняя ~1 с — начало фразы
                                 roll = []
                                 continue
-                    continue  # без «Зевс» и без голоса владельца — эхо, слова не разбираем
+                    continue  # без «имя» и без голоса владельца — эхо, слова не разбираем
                 if not in_speech:
                     if not barge:  # эхо колонок шум не меняет
                         noise = 0.95 * noise + 0.05 * rms if rms < thr else noise
@@ -981,11 +981,11 @@ class Core:
                                     self.emit(type="heard", text=text, why="paused" if self.standby else "nowake")
                                 elif not owner:
                                     self.spk.add(audio)  # принятая команда — образец голоса владельца
-                            if owner:  # Зевс на паузе: сказал своё — молчим, нет — договаривает
+                            if owner:  # помощник на паузе: сказал своё — молчим, нет — договаривает
                                 owner = False
                                 self.pause_resume = not handled
                                 self.pause_done.set()
-                        if owner:  # фраза вышла слишком короткой — Зевс договаривает
+                        if owner:  # фраза вышла слишком короткой — помощник договаривает
                             owner = False
                             self.pause_resume = True
                             self.pause_done.set()
@@ -1052,7 +1052,7 @@ def main():
         text = core.transcribe(decode_audio(sys.argv[2]))
         m = WAKE.match(text)
         print("текст:", text)
-        print("команда:", text[m.end():].strip() if m else "(нет слова «Зевс»)")
+        print("команда:", text[m.end():].strip() if m else "(нет слова «имя»)")
         return
     lock = single_instance()
     if not lock:
